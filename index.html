@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simulador Contagio</title>
+    <script src="//unpkg.com/alpinejs" defer></script>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"
+      integrity="sha512-N4kV7GkNv7QR7RX9YF/olywyIgIwNvfEe2nZtfyj73HdjCUkAfOBDbcuJ/cTaN04JKRnw1YG1wnUyNKMsNgg3g=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script src="https://cdn.jsdelivr.net/gh/CodingTrain/QuadTree/quadtree.min.js"></script>
+
+    <script src="./Persona.js"></script>
+    <script src="./sketch.js"></script>
+
+    <link rel="stylesheet" href="./global.css" />
+  </head>
+  <body>
+    <div x-data="{muestra:false}">
+      <div id="contenedor">
+        <div id="dataviz"></div>
+
+        <div id="numeralia">
+          <div class="numeralia">
+            <span
+              >😀 Sanos:
+              <strong>
+                <span x-text="$store.simula.contadores.sanos"></span> </strong
+            ></span>
+            <span
+              >🤒 Enfermos:
+              <strong
+                ><span
+                  x-text="$store.simula.contadores.enfermos"
+                ></span></strong
+            ></span>
+            <span
+              >😷 Recuperados:
+              <strong
+                ><span
+                  x-text="$store.simula.contadores.recuperados"
+                ></span></strong
+            ></span>
+            <span
+              >💀 Fallecidos:
+              <strong
+                ><span x-text="$store.simula.contadores.muertos"></span></strong
+            ></span>
+          </div>
+
+          <div
+            id="panel"
+            transition:slide
+            x-show="$store.simula.terminado"
+            x-transition
+            x-cloak
+          >
+            <h2>Simulación terminada 💻</h2>
+            <div id="rangos">
+              <label>
+                Población: <br /><input
+                  type="range"
+                  min="50"
+                  max="700"
+                  step="1"
+                  x-model:value="$store.simula.poblacion"
+                /><br />
+                👨‍👩‍👧‍👦 <span x-text="$store.simula.poblacion"></span> Personas
+              </label>
+
+              <label>
+                En Cuarentena: <br />
+                <input
+                  type="range"
+                  min="0"
+                  max="90"
+                  step="1"
+                  x-model:value="$store.simula.encuarentena"
+                /><br />
+                🏡 <span x-text="$store.simula.encuarentena"></span> %
+              </label>
+              <label>
+                Mortalidad: <br />
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  x-model:value="$store.simula.mortalidad"
+                /><br />
+                ☠ <span x-text="$store.simula.mortalidad"></span> %
+              </label>
+              <label>
+                Tiempo Enfermo: <br />
+                <input
+                  type="range"
+                  min="100"
+                  max="1000"
+                  step="1"
+                  x-model:value="$store.simula.tiempoenfermedad"
+                /><br />
+                🔁 <span x-text="$store.simula.tiempoenfermedad"></span> ciclos
+              </label>
+
+              <label class="clsmodozombie">
+                <input
+                  type="checkbox"
+                  x-model:checked="$store.simula.modozombie"
+                />
+                🧟‍♂️ modo zombie
+              </label>
+            </div>
+            <button id="btnReinicia" x-on:click="() => {Reinicia();}">
+              Re-inicializa
+            </button>
+          </div>
+
+          <div
+            class="numeralia numeralia2"
+            x-show="!$store.simula.terminado"
+            x-transition
+            x-cloak
+          >
+            <span
+              >👨‍👨‍👧‍👦 Población:
+              <strong
+                ><span x-text="$store.simula.poblacion"></span> personas
+              </strong></span
+            >
+            <span
+              >🏡 En cuarentena:
+              <strong
+                ><span x-text="$store.simula.encuarentena"></span>%
+              </strong></span
+            >
+            <span
+              >☠ Mortalidad:
+              <strong
+                ><span x-text="$store.simula.mortalidad"></span>%
+              </strong></span
+            >
+            <span
+              >🔁 Tiempo Enfermo:
+              <strong
+                ><span x-text="$store.simula.tiempoenfermedad"></span> ciclos
+              </strong></span
+            >
+            <span style="color: red" x-show="$store.simula.modozombie"
+              ><strong>Modo Zombie Activo 🧟‍♂️</strong></span
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="topcorner">
+        <span class="btncierra" x-on:click="muestra=!muestra"> 📕 </span>
+        <div x-show="muestra" x-transition x-cloak>
+          <h2>Simulador de contagios</h2>
+          <p>
+            En cada simulación se puede seleccionar: la población de individuos,
+            el porcentaje de estos que se mantendrán en cuarentena (no se
+            moverán), la tasa de mortalidad de la enfermedad y el tiempo que se
+            mantendrán enfermos los individuos antes de recuperarse o morir
+          </p>
+
+          <h3>Código de colores:</h3>
+          <div class="spans">
+            <h6>
+              <div class="circulo" style="background-color: lime"></div>
+              Sanos
+            </h6>
+            <h6>
+              <div class="circulo" style="background-color: orange"></div>
+              Enfermos
+            </h6>
+            <h6>
+              <div class="circulo" style="background-color: cyan"></div>
+              Recuperados &nbsp;<span style="font-size: x-small">
+                (enfermaron y sobrevivieron)</span
+              >
+            </h6>
+            <h6>
+              <div class="circulo" style="background-color: black"></div>
+              Fallecidos
+            </h6>
+            <h4>
+              En el modo zombie los muertos se mueven y contagian a otros
+              individuos
+            </h4>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
