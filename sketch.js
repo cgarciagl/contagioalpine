@@ -1,5 +1,7 @@
 let root;
 
+let miGrafico;
+
 document.addEventListener("alpine:init", () => {
   Alpine.store("simula", {
     poblacion: 300,
@@ -16,25 +18,92 @@ document.addEventListener("alpine:init", () => {
 });
 
 function setup() {
-  var canvas = createCanvas(800, 500);
+  var canvas = createCanvas(800, 300);
   canvas.parent("dataviz");
+
+  var ctx = document.getElementById("miGrafico").getContext("2d");
+
+  // Crea el gráfico de líneas con 4 series vacías
+  miGrafico = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "Sanos",
+          borderColor: "lime",
+          borderWidth: 2,
+          fill: false,
+          data: [],
+        },
+        {
+          label: "Enfermos",
+          borderColor: "orange",
+          borderWidth: 2,
+          fill: false,
+          data: [],
+        },
+        {
+          label: "Recuperados",
+          borderColor: "cyan",
+          borderWidth: 2,
+          fill: false,
+          data: [],
+        },
+        {
+          label: "Fallecidos",
+          borderColor: "black",
+          borderWidth: 2,
+          fill: false,
+          data: [],
+        },
+      ],
+    },
+    stacked: true,
+    options: {
+      height: 200,
+      animation: {
+        duration: 0, // Desactiva las animaciones
+      },
+      plugins: {
+        legend: {
+          display: false, // Oculta la leyenda
+        },
+      },
+      scales: {
+        x: [
+          {
+            display: false, // Oculta las etiquetas en el eje X
+          },
+        ],
+        y: [
+          {
+            display: false, // Oculta las etiquetas en el eje Y
+            ticks: {
+              max: 100, // Establece el máximo en el eje Y
+            },
+          },
+        ],
+      },
+    },
+  });
+
   Reinicia();
 }
 
 function draw() {
   fill("#EAEAEA");
-  rect(0, 0, width, height - 100);
+  rect(0, 0, width, height);
   checarColisionesyActualizaContadores();
   mostrarChart();
 }
 
 function mostrarChart() {
   let i = frameCount % width;
-  strokeWeight(3);
 
   let pob = root.personas.length || 1;
 
-  stroke("orange");
+  /* stroke("orange");
   let prop = (root.contadores.enfermos / pob) * 100;
   let ult = height - prop;
   line(i, ult, i, height);
@@ -50,6 +119,17 @@ function mostrarChart() {
   prop = (root.contadores.sanos / pob) * 100;
   line(i, ult - prop, i, ult);
   ult = ult - prop;
+
+  strokeWeight(1);
+  stroke("black");*/
+
+  if (!root.terminado) {
+    miGrafico.data.labels.push("");
+    miGrafico.data.datasets[0].data.push(root.contadores.sanos);
+    miGrafico.data.datasets[1].data.push(root.contadores.enfermos);
+    miGrafico.data.datasets[2].data.push(root.contadores.recuperados);
+    miGrafico.data.datasets[3].data.push(root.contadores.fallecidos);
+  }
 
   strokeWeight(1);
   stroke("black");
@@ -87,7 +167,10 @@ function checarColisionesyActualizaContadores() {
   });
 
   if (root.contadores.enfermos == 0) {
-    root.terminado = true;
+    if (!root.terminado) {
+      root.terminado = true;
+      miGrafico.update();
+    }
   }
 }
 
@@ -105,4 +188,16 @@ function Reinicia() {
   }
 
   root.terminado = false;
+  limpiarDatos();
+}
+
+function limpiarDatos() {
+  miGrafico.data.labels = [];
+
+  for (var i = 0; i < miGrafico.data.datasets.length; i++) {
+    miGrafico.data.datasets[i].data = [];
+  }
+
+  // Actualiza el gráfico después de limpiar los datos
+  miGrafico.update();
 }

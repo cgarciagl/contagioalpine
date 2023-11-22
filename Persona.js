@@ -63,11 +63,11 @@ class Persona {
       this.pos.x - this.radio < 0 ||
       this.pos.y - this.radio < 0 ||
       this.pos.x + this.radio > width ||
-      this.pos.y + this.radio > height - 100
+      this.pos.y + this.radio > height
     ) {
       this.vel.rotate(HALF_PI);
       this.pos.x = constrain(this.pos.x, this.radio, width - this.radio);
-      this.pos.y = constrain(this.pos.y, this.radio, height - this.radio - 100);
+      this.pos.y = constrain(this.pos.y, this.radio, height - this.radio);
     }
   }
 
