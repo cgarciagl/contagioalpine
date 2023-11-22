@@ -17,7 +17,11 @@
     ></script>
     <script src="https://cdn.jsdelivr.net/gh/CodingTrain/QuadTree/quadtree.min.js"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Agrega la biblioteca de Google Charts -->
+    <script
+      type="text/javascript"
+      src="https://www.gstatic.com/charts/loader.js"
+    ></script>
 
     <script src="./Persona.js"></script>
     <script src="./sketch.js"></script>
@@ -28,9 +32,7 @@
     <div x-data="{muestra:false}">
       <div id="contenedor">
         <div id="dataviz"></div>
-        <div style="height: 200px">
-          <canvas id="miGrafico"></canvas>
-        </div>
+        <div id="miGrafico" style="width: 100%; height: 200px"></div>
 
         <div id="numeralia">
           <div class="numeralia">

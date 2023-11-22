@@ -1,6 +1,22 @@
 let root;
 
-let miGrafico;
+var data = {};
+var chart = {};
+// Configura las opciones del gráfico
+var options = {
+  curveType: "function",
+  legend: { position: "none" }, // Oculta la leyenda
+  colors: ["lime", "orange", "cyan", "black"],
+  vAxis: {
+    textPosition: "none", // No muestra la escala del eje y
+    viewWindow: {
+      min: 0, // Inicia la escala del eje y en 0
+    },
+  },
+};
+
+google.charts.load("current", { packages: ["corechart"] });
+google.charts.setOnLoadCallback(inicializarGrafico);
 
 document.addEventListener("alpine:init", () => {
   Alpine.store("simula", {
@@ -17,78 +33,26 @@ document.addEventListener("alpine:init", () => {
   root = Alpine.store("simula");
 });
 
-function setup() {
-  var canvas = createCanvas(800, 300);
-  canvas.parent("dataviz");
+function inicializarGrafico() {
+  // Define la estructura de los datos
+  data = new google.visualization.DataTable();
+  data.addColumn("string", "X");
+  data.addColumn("number", "Sanos");
+  data.addColumn("number", "Enfermos");
+  data.addColumn("number", "Recuperados");
+  data.addColumn("number", "Muertos");
 
-  var ctx = document.getElementById("miGrafico").getContext("2d");
-
-  // Crea el gráfico de líneas con 4 series vacías
-  miGrafico = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: "Sanos",
-          borderColor: "lime",
-          borderWidth: 2,
-          fill: false,
-          data: [],
-        },
-        {
-          label: "Enfermos",
-          borderColor: "orange",
-          borderWidth: 2,
-          fill: false,
-          data: [],
-        },
-        {
-          label: "Recuperados",
-          borderColor: "cyan",
-          borderWidth: 2,
-          fill: false,
-          data: [],
-        },
-        {
-          label: "Fallecidos",
-          borderColor: "black",
-          borderWidth: 2,
-          fill: false,
-          data: [],
-        },
-      ],
-    },
-    stacked: true,
-    options: {
-      height: 200,
-      animation: {
-        duration: 0, // Desactiva las animaciones
-      },
-      plugins: {
-        legend: {
-          display: false, // Oculta la leyenda
-        },
-      },
-      scales: {
-        x: [
-          {
-            display: false, // Oculta las etiquetas en el eje X
-          },
-        ],
-        y: [
-          {
-            display: false, // Oculta las etiquetas en el eje Y
-            ticks: {
-              max: 100, // Establece el máximo en el eje Y
-            },
-          },
-        ],
-      },
-    },
-  });
-
+  // Crea el gráfico de líneas
+  chart = new google.visualization.AreaChart(
+    document.getElementById("miGrafico")
+  );
   Reinicia();
+}
+
+function setup() {
+  var canvas = createCanvas(800, 400);
+  canvas.parent("dataviz");
+  inicializarGrafico;
 }
 
 function draw() {
@@ -101,34 +65,20 @@ function draw() {
 function mostrarChart() {
   let i = frameCount % width;
 
-  let pob = root.personas.length || 1;
-
-  /* stroke("orange");
-  let prop = (root.contadores.enfermos / pob) * 100;
-  let ult = height - prop;
-  line(i, ult, i, height);
-  stroke("cyan"); //lightblue
-  prop = (root.contadores.recuperados / pob) * 100;
-  line(i, ult - prop, i, ult);
-  ult = ult - prop;
-  stroke("black"); //black
-  prop = (root.contadores.muertos / pob) * 100;
-  line(i, ult - prop, i, ult);
-  ult = ult - prop;
-  stroke("lime"); //lime
-  prop = (root.contadores.sanos / pob) * 100;
-  line(i, ult - prop, i, ult);
-  ult = ult - prop;
-
-  strokeWeight(1);
-  stroke("black");*/
-
   if (!root.terminado) {
-    miGrafico.data.labels.push("");
-    miGrafico.data.datasets[0].data.push(root.contadores.sanos);
-    miGrafico.data.datasets[1].data.push(root.contadores.enfermos);
-    miGrafico.data.datasets[2].data.push(root.contadores.recuperados);
-    miGrafico.data.datasets[3].data.push(root.contadores.fallecidos);
+    if (i % 15 == 0) {
+      var dataValues = [];
+      dataValues.push([
+        "",
+        root.contadores.sanos,
+        root.contadores.enfermos,
+        root.contadores.recuperados,
+        root.contadores.muertos,
+      ]);
+
+      data.addRows(dataValues);
+      chart.draw(data, options);
+    }
   }
 
   strokeWeight(1);
@@ -169,7 +119,7 @@ function checarColisionesyActualizaContadores() {
   if (root.contadores.enfermos == 0) {
     if (!root.terminado) {
       root.terminado = true;
-      miGrafico.update();
+      chart.draw(data, options);
     }
   }
 }
@@ -192,12 +142,5 @@ function Reinicia() {
 }
 
 function limpiarDatos() {
-  miGrafico.data.labels = [];
-
-  for (var i = 0; i < miGrafico.data.datasets.length; i++) {
-    miGrafico.data.datasets[i].data = [];
-  }
-
-  // Actualiza el gráfico después de limpiar los datos
-  miGrafico.update();
+  data.removeRows(0, data.getNumberOfRows());
 }
