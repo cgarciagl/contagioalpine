@@ -1,5 +1,3 @@
-- [Simulador de contagio en AlpineJs y P5 Js](#simulador-de-contagio-en-svelte-y-p5-js)
-
 # Simulador de contagio en AlpineJs y P5 Js
 
 This was made as an exercise to learn AlpineJs.
