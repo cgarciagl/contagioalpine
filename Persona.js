@@ -59,32 +59,47 @@ class Persona {
   }
 
   rebotarConParedes() {
-    if (
-      this.pos.x - this.radio < 0 ||
-      this.pos.y - this.radio < 0 ||
-      this.pos.x + this.radio > width ||
-      this.pos.y + this.radio > height
-    ) {
-      this.vel.rotate(HALF_PI);
-      this.pos.x = constrain(this.pos.x, this.radio, width - this.radio);
-      this.pos.y = constrain(this.pos.y, this.radio, height - this.radio);
+    const { pos, radio, vel } = this;
+    const maxX = width - radio;
+    const maxY = height - radio;
+
+    if (pos.x - radio <= 0 || pos.x + radio >= maxX) {
+      vel.x *= -1;
+      pos.x = constrain(pos.x, radio, maxX);
+    }
+
+    if (pos.y - radio <= 0 || pos.y + radio >= maxY) {
+      vel.y *= -1;
+      pos.y = constrain(pos.y, radio, maxY);
     }
   }
 
   colisiona(p) {
-    if (dist(this.pos.x, this.pos.y, p.pos.x, p.pos.y) <= this.radio * 2) {
+    const distancia = dist(this.pos.x, this.pos.y, p.pos.x, p.pos.y);
+    const sumaRadios = this.radio + p.radio;
+    if (distancia <= sumaRadios) {
+      const direccion = createVector(
+        this.pos.x - p.pos.x,
+        this.pos.y - p.pos.y
+      );
+      direccion.setMag(sumaRadios - distancia);
+      this.pos.add(direccion);
+
       if (this.estado == "enfermo" || p.estado == "enfermo") {
         this.contagiado();
       }
 
-      if (root.modozombie) {
-        if (this.estado == "muerto" || p.estado == "muerto") {
-          this.contagiado();
-        }
+      if (
+        root.modozombie &&
+        (this.estado == "muerto" || p.estado == "muerto")
+      ) {
+        this.contagiado();
       }
 
       this.vel.rotate(random(HALF_PI));
     }
+    this.rebotarConParedes();
+    p.rebotarConParedes();
   }
 
   contagiado() {
