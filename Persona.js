@@ -1,8 +1,15 @@
-let colorEstado = {
-  sano: "lime",
-  enfermo: "orange",
-  recuperado: "cyan",
-  muerto: "black",
+const ESTADOS = Object.freeze({
+  SANO: "sano",
+  ENFERMO: "enfermo",
+  RECUPERADO: "recuperado",
+  MUERTO: "muerto",
+});
+
+const colorEstado = {
+  [ESTADOS.SANO]: "lime",
+  [ESTADOS.ENFERMO]: "orange",
+  [ESTADOS.RECUPERADO]: "cyan",
+  [ESTADOS.MUERTO]: "black",
 };
 
 class Persona {
@@ -10,9 +17,21 @@ class Persona {
     this.pos = createVector(x, y);
     this.vel = createVector(random(-3, 3), random(-3, 3));
     this.radio = 3;
-    this.estado = "sano";
+    this.estado = ESTADOS.SANO;
     this.tiempoenfermo = 0;
     this.movible = true;
+  }
+
+  setEstado(nuevoEstado) {
+    this.estado = nuevoEstado;
+    switch (nuevoEstado) {
+      case ESTADOS.MUERTO:
+        this.movible = !!root.modozombie;
+        break;
+    }
+    if (nuevoEstado === ESTADOS.MUERTO || nuevoEstado === ESTADOS.RECUPERADO) {
+      this.vel.div(5);
+    }
   }
 
   dibuja() {
@@ -27,35 +46,26 @@ class Persona {
       this.rebotarConParedes();
     }
 
-    if (this.estado == "enfermo") {
+    if (this.estado === ESTADOS.ENFERMO) {
       this.tiempoenfermo++;
-    }
-
-    if (
-      this.estado == "enfermo" &&
-      this.tiempoenfermo > root.tiempoenfermedad
-    ) {
-      this.muerto();
+      if (this.tiempoenfermo > root.tiempoenfermedad) {
+        this.resolverEnfermedad();
+      }
     }
 
     this.dibuja();
   }
 
-  muerto() {
+  resolverEnfermedad() {
     if (random(1, 100) <= root.mortalidad) {
-      this.estado = "muerto";
-      this.movible = false;
-      if (root.modozombie) {
-        this.movible = true;
-      }
+      this.setEstado(ESTADOS.MUERTO);
     } else {
-      this.estado = "recuperado";
       if (root.modozombie) {
-        this.estado = "muerto";
-        this.movible = true;
+        this.setEstado(ESTADOS.MUERTO);
+      } else {
+        this.setEstado(ESTADOS.RECUPERADO);
       }
     }
-    this.vel.div(5);
   }
 
   rebotarConParedes() {
@@ -85,13 +95,13 @@ class Persona {
       direccion.setMag(sumaRadios - distancia);
       this.pos.add(direccion);
 
-      if (this.estado == "enfermo" || p.estado == "enfermo") {
+      if (this.estado === ESTADOS.ENFERMO || p.estado === ESTADOS.ENFERMO) {
         this.contagiado();
       }
 
       if (
         root.modozombie &&
-        (this.estado == "muerto" || p.estado == "muerto")
+        (this.estado === ESTADOS.MUERTO || p.estado === ESTADOS.MUERTO)
       ) {
         this.contagiado();
       }
@@ -103,8 +113,8 @@ class Persona {
   }
 
   contagiado() {
-    if (this.estado == "sano") {
-      this.estado = "enfermo";
+    if (this.estado === ESTADOS.SANO) {
+      this.setEstado(ESTADOS.ENFERMO);
     }
   }
 }
