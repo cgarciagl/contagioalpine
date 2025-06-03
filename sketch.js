@@ -110,15 +110,16 @@ function drawGraph() {
   let graphWidth = width - 20;
   let xStep = graphWidth / maxIterations;
 
-  drawLineGraph(history.sanos, color(0, 255, 0, 150), xStep, graphHeight); // lime with transparency
-  drawLineGraph(history.enfermos, color(255, 165, 0, 150), xStep, graphHeight); // orange with transparency
-  drawLineGraph(
-    history.recuperados,
-    color(0, 255, 255, 150),
-    xStep,
-    graphHeight
-  ); // cyan with transparency
-  drawLineGraph(history.muertos, color(0, 0, 0, 150), xStep, graphHeight); // black with transparency
+  // Colores extraídos a variables
+  const colorSanos = color(0, 255, 0, 150); // lime con transparencia
+  const colorEnfermos = color(255, 165, 0, 150); // naranja con transparencia
+  const colorRecuperados = color(0, 255, 255, 150); // cyan con transparencia
+  const colorMuertos = color(0, 0, 0, 150); // negro con transparencia
+
+  drawLineGraph(history.sanos, colorSanos, xStep, graphHeight);
+  drawLineGraph(history.enfermos, colorEnfermos, xStep, graphHeight);
+  drawLineGraph(history.recuperados, colorRecuperados, xStep, graphHeight);
+  drawLineGraph(history.muertos, colorMuertos, xStep, graphHeight);
 }
 
 function drawLineGraph(data, col, xStep, graphHeight) {
