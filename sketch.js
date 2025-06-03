@@ -1,21 +1,28 @@
 let root;
-let poblaciondesimulacion = 300;
+let totalSimulationPopulation = 300;
 
 let history = {};
 
+const DEFAULT_POBLACION = 300;
+const DEFAULT_ENCUARENTENA = 20;
+const DEFAULT_TIEMPO_ENFERMEDAD = 150;
+const DEFAULT_MORTALIDAD = 50;
+const DEFAULT_MODO_ZOMBIE = false;
+const STORE_NAME = "simula";
+
 document.addEventListener("alpine:init", () => {
-  Alpine.store("simula", {
-    poblacion: 300,
-    encuarentena: 20,
+  Alpine.store(STORE_NAME, {
+    poblacion: DEFAULT_POBLACION,
+    encuarentena: DEFAULT_ENCUARENTENA,
     terminado: false,
-    tiempoenfermedad: 150,
-    modozombie: false,
-    mortalidad: 50,
+    tiempoenfermedad: DEFAULT_TIEMPO_ENFERMEDAD,
+    modozombie: DEFAULT_MODO_ZOMBIE,
+    mortalidad: DEFAULT_MORTALIDAD,
     contadores: {},
     personas: [],
   });
 
-  root = Alpine.store("simula");
+  root = Alpine.store(STORE_NAME);
 });
 
 function setup() {
@@ -78,14 +85,14 @@ function Reinicia() {
   for (let i = 1; i <= root.poblacion; i++) {
     root.personas.push(new Persona(random(width - 10), random(390)));
   }
-  root.personas[0].estado = "enfermo";
+  root.personas[0].estado = ESTADOS.ENFERMO; //ponemos a la primera persona enferma
   //ponemos personas en cuarentena..
   for (let i = 1; i <= (root.encuarentena * root.poblacion) / 100; i++) {
     root.personas[i].movible = false;
   }
 
   root.terminado = false;
-  poblaciondesimulacion = root.poblacion;
+  totalSimulationPopulation = root.poblacion;
 
   history = {
     sanos: [],
@@ -129,7 +136,7 @@ function drawLineGraph(data, col, xStep, graphHeight) {
   for (let i = 0; i < data.length; i++) {
     let x = 10 + i * xStep;
     let y =
-      height - 10 - map(data[i], 0, poblaciondesimulacion, 0, graphHeight);
+      height - 10 - map(data[i], 0, totalSimulationPopulation, 0, graphHeight);
     vertex(x, y);
   }
   endShape();
