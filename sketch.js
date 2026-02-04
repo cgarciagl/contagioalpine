@@ -1,7 +1,8 @@
 let root;
 let totalSimulationPopulation = 300;
-
-let history = {};
+let history = { sanos: [], enfermos: [], recuperados: [], muertos: [] };
+let graphBuffer;
+let apexChart;
 
 const DEFAULT_POBLACION = 300;
 const DEFAULT_ENCUARENTENA = 20;
@@ -18,7 +19,8 @@ document.addEventListener("alpine:init", () => {
     tiempoenfermedad: DEFAULT_TIEMPO_ENFERMEDAD,
     modozombie: DEFAULT_MODO_ZOMBIE,
     mortalidad: DEFAULT_MORTALIDAD,
-    contadores: {},
+    velocidad: 1.5,
+    contadores: { sanos: 0, enfermos: 0, recuperados: 0, muertos: 0 },
     personas: [],
   });
 
@@ -26,118 +28,161 @@ document.addEventListener("alpine:init", () => {
 });
 
 function setup() {
-  var canvas = createCanvas(800, 400);
+  const canvas = createCanvas(windowWidth, windowHeight);
   canvas.parent("dataviz");
+  
+  initChart();
   Reinicia();
 }
 
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  if (apexChart) {
+    apexChart.render(); // Redraw chart for new dimensions
+  }
+}
+
 function draw() {
-  fill("#EAEAEA");
-  rect(0, 0, width, height);
+  background("#0f172a"); 
+  
   checarColisionesyActualizaContadores();
 }
 
 function checarColisionesyActualizaContadores() {
-  const r = new Rectangle(400, 250, 800, 500);
-  const capacity = 4;
-  const quadtree = new QuadTree(r, capacity);
+  const quadtree = new QuadTree(new Rectangle(width / 2, height / 2, width, height), 4);
 
-  root.contadores = {
+  const currentContadores = {
     enfermos: 0,
     sanos: 0,
     muertos: 0,
     recuperados: 0,
   };
 
-  root.personas.forEach(function (value1, i) {
-    value1.update();
-    root.contadores[value1.estado + "s"]++;
-    let p = new Point(value1.pos.x, value1.pos.y, value1);
-    quadtree.insert(p);
-  });
+  for (let persona of root.personas) {
+    persona.update();
+    currentContadores[persona.estado + "s"]++;
+    quadtree.insert(new Point(persona.pos.x, persona.pos.y, persona));
+  }
 
-  root.personas.forEach(function (value1, i) {
-    let c = new Circle(value1.pos.x, value1.pos.y, 10);
-    let puntos = quadtree.query(c);
+  // Update store only once per frame
+  root.contadores = currentContadores;
 
-    puntos.forEach(function (punto, i) {
-      let value2 = punto.userData;
-      if (value2 != value1) {
-        value1.colisiona(value2);
+  for (let persona of root.personas) {
+    // Optimization: sick or dead (in zombie mode) can infect others
+    const canInfect = (persona.estado === ESTADOS.ENFERMO || (root.modozombie && persona.estado === ESTADOS.MUERTO));
+    
+    let queryCircle = new Circle(persona.pos.x, persona.pos.y, persona.radio * 4);
+    let points = quadtree.query(queryCircle);
+
+    for (let point of points) {
+      let other = point.userData;
+      if (other !== persona) {
+        persona.colisiona(other);
       }
-    });
-  });
+    }
+  }
 
-  if (root.contadores.enfermos == 0) {
+  if (currentContadores.enfermos === 0 && root.personas.length > 0) {
     if (!root.terminado) {
       root.terminado = true;
     }
   }
 
   updateHistory();
-  drawGraph();
 }
 
 function Reinicia() {
-  while (root.personas.length > 0) {
-    root.personas.pop();
+  root.personas = [];
+  for (let i = 0; i < root.poblacion; i++) {
+    root.personas.push(new Persona(random(width), random(height)));
   }
-  for (let i = 1; i <= root.poblacion; i++) {
-    root.personas.push(new Persona(random(width - 10), random(390)));
-  }
-  root.personas[0].estado = ESTADOS.ENFERMO; //ponemos a la primera persona enferma
-  //ponemos personas en cuarentena..
-  for (let i = 1; i <= (root.encuarentena * root.poblacion) / 100; i++) {
+  
+  // Infect the first person
+  root.personas[0].setEstado(ESTADOS.ENFERMO);
+  
+  // Set quarantine
+  const numQuarantine = Math.floor((root.encuarentena * root.poblacion) / 100);
+  for (let i = 1; i <= numQuarantine; i++) {
     root.personas[i].movible = false;
   }
 
   root.terminado = false;
   totalSimulationPopulation = root.poblacion;
 
-  history = {
-    sanos: [],
-    enfermos: [],
-    recuperados: [],
-    muertos: [],
-  };
+  history = { sanos: [], enfermos: [], recuperados: [], muertos: [] };
+  if (apexChart) {
+    apexChart.updateOptions({
+      yaxis: { show: false, min: 0, max: root.poblacion }
+    });
+    apexChart.updateSeries([
+      { name: 'Sanos', data: [] },
+      { name: 'Enfermos', data: [] },
+      { name: 'Recuperados', data: [] },
+      { name: 'Fallecidos', data: [] }
+    ]);
+  }
 }
 
 function updateHistory() {
-  if (!root.terminado) {
+  if (!root.terminado && frameCount % 30 === 0) { // Actualizar cada 30 frames para mayor fluidez
     history.sanos.push(root.contadores.sanos);
     history.enfermos.push(root.contadores.enfermos);
     history.recuperados.push(root.contadores.recuperados);
     history.muertos.push(root.contadores.muertos);
+
+    if (apexChart) {
+      // Usar false para que no haya animaciones de redibujo que causen parpadeo
+      apexChart.updateSeries([
+        { name: 'Sanos', data: [...history.sanos] },
+        { name: 'Enfermos', data: [...history.enfermos] },
+        { name: 'Recuperados', data: [...history.recuperados] },
+        { name: 'Fallecidos', data: [...history.muertos] }
+      ], false); 
+    }
   }
 }
 
-function drawGraph() {
-  let maxIterations = history.sanos.length;
-  let graphHeight = 100;
-  let graphWidth = width - 20;
-  let xStep = graphWidth / maxIterations;
+function initChart() {
+  const options = {
+    series: [
+      { name: 'Sanos', data: [] },
+      { name: 'Enfermos', data: [] },
+      { name: 'Recuperados', data: [] },
+      { name: 'Fallecidos', data: [] }
+    ],
+    chart: {
+      type: 'area',
+      height: 200,
+      animations: { 
+        enabled: true, 
+        easing: 'linear', 
+        dynamicAnimation: { enabled: true, speed: 400 } 
+      },
+      toolbar: { show: false },
+      sparkline: { enabled: true },
+      background: 'transparent'
+    },
+    colors: ['#3b82f6', '#f43f5e', '#10b981', '#64748b'],
+    stroke: { curve: 'smooth', width: 2 },
+    fill: {
+      type: 'gradient',
+      gradient: {
+        shadeIntensity: 1,
+        opacityFrom: 0.45,
+        opacityTo: 0.05,
+        stops: [20, 100]
+      }
+    },
+    tooltip: {
+      theme: 'dark',
+      x: { show: false },
+      y: { title: { formatter: (val) => val } }
+    },
+    grid: { show: false },
+    xaxis: { labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
+    yaxis: { show: false, min: 0, max: totalSimulationPopulation }
+  };
 
-  // Colores extraídos a variables
-  const colorSanos = color(0, 255, 0, 150); // lime con transparencia
-  const colorEnfermos = color(255, 165, 0, 150); // naranja con transparencia
-  const colorRecuperados = color(0, 255, 255, 150); // cyan con transparencia
-  const colorMuertos = color(0, 0, 0, 150); // negro con transparencia
-
-  drawLineGraph(history.sanos, colorSanos, xStep, graphHeight);
-  drawLineGraph(history.enfermos, colorEnfermos, xStep, graphHeight);
-  drawLineGraph(history.recuperados, colorRecuperados, xStep, graphHeight);
-  drawLineGraph(history.muertos, colorMuertos, xStep, graphHeight);
-}
-
-function drawLineGraph(data, col, xStep, graphHeight) {
-  stroke(col);
-  noFill();
-  beginShape();
-  for (let i = 0; i < data.length; i++) {
-    let x = 10 + i * xStep;
-    let y =
-      height - 10 - map(data[i], 0, totalSimulationPopulation, 0, graphHeight);
-    vertex(x, y);
-  }
-  endShape();
+  apexChart = new ApexCharts(document.querySelector("#chart-container"), options);
+  apexChart.render();
 }
