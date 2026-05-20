@@ -27,97 +27,253 @@
 
     <link rel="stylesheet" href="./global.css" />
   </head>
-  <body x-data="{ showInfo: false }">
+  <body x-data="{ showInfo: false, showChart: false, sidebarOpen: true }">
     <!-- Main Simulation Canvas Container -->
     <div id="dataviz"></div>
 
-    <!-- ApexChart Container -->
-    <div id="chart-container"></div>
+    <!-- Toggle Sidebar Button (when sidebar is closed) -->
+    <button class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen" :class="{ 'open': sidebarOpen }" aria-label="Toggle settings">
+      <span x-show="!sidebarOpen">⚙️ Configuración</span>
+      <span x-show="sidebarOpen">✕ Cerrar</span>
+    </button>
 
-    <!-- Dashboard Overlay -->
-    <div class="dashboard">
-      <!-- Live Statistics -->
-      <div class="stats-grid">
-        <div class="stat-card sano">
-          <span class="stat-label">Sanos</span>
-          <span class="stat-value" x-text="$store.simula.contadores.sanos || 0"></span>
-        </div>
-        <div class="stat-card enfermo">
-          <span class="stat-label">Enfermos</span>
-          <span class="stat-value" x-text="$store.simula.contadores.enfermos || 0"></span>
-        </div>
-        <div class="stat-card recuperado">
-          <span class="stat-label">Recuperados</span>
-          <span class="stat-value" x-text="$store.simula.contadores.recuperados || 0"></span>
-        </div>
-        <div class="stat-card muerto">
-          <span class="stat-label">Fallecidos</span>
-          <span class="stat-value" x-text="$store.simula.contadores.muertos || 0"></span>
-        </div>
+    <!-- Sidebar de Configuración (Left) -->
+    <aside class="sidebar" x-show="sidebarOpen" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-x-0" x-transition:leave-end="-translate-x-full">
+      <div class="sidebar-header">
+        <h2>EpidemicSim 🧬</h2>
+        <p class="subtitle">Simulador Basado en Agentes</p>
       </div>
 
-      <!-- Control Panel (Visible when finished or manually toggled) -->
-      <div class="controls-panel" 
-           x-show="$store.simula.terminado" 
-           x-transition:enter="transition ease-out duration-300"
-           x-transition:enter-start="opacity-0 translate-y-10"
-           x-transition:enter-end="opacity-100 translate-y-0"
-           x-cloak>
-        
-        <h2>Simulación Finalizada 🧬</h2>
-        
-        <div class="controls-grid">
-          <div class="control-group">
-            <label>Población <span x-text="$store.simula.poblacion"></span></label>
-            <input type="range" min="50" max="700" step="10" x-model.number="$store.simula.poblacion" />
+      <div class="sidebar-scroll custom-scroll">
+        <div class="controls-section">
+          <h3>Población Inicial</h3>
+          <div class="control-group-sidebar">
+            <div class="slider-header">
+              <span>Sujetos</span>
+              <span class="highlight-val" x-text="$store.simula.poblacion"></span>
+            </div>
+            <input type="range" min="50" max="700" step="10" x-model.number="$store.simula.poblacion" @input="Reinicia()" />
           </div>
 
-          <div class="control-group">
-            <label>En Cuarentena <span x-text="$store.simula.encuarentena + '%'"></span></label>
-            <input type="range" min="0" max="95" step="5" x-model.number="$store.simula.encuarentena" />
+          <div class="control-group-sidebar">
+            <div class="slider-header">
+              <span>En Cuarentena</span>
+              <span class="highlight-val" x-text="$store.simula.encuarentena + '%'"></span>
+            </div>
+            <input type="range" min="0" max="95" step="5" x-model.number="$store.simula.encuarentena" @input="Reinicia()" />
+          </div>
+        </div>
+
+        <div class="controls-section">
+          <h3>Dinámicas de Transmisión</h3>
+          
+          <div class="control-group-sidebar">
+            <div class="slider-header">
+              <span>Probabilidad de Contagio</span>
+              <span class="highlight-val" x-text="$store.simula.tasacontagio + '%'"></span>
+            </div>
+            <input type="range" min="10" max="100" step="5" x-model.number="$store.simula.tasacontagio" />
           </div>
 
-          <div class="control-group">
-            <label>Mortalidad <span x-text="$store.simula.mortalidad + '%'"></span></label>
+          <div class="control-group-sidebar">
+            <div class="slider-header">
+              <span>Tasa de Mortalidad</span>
+              <span class="highlight-val" x-text="$store.simula.mortalidad + '%'"></span>
+            </div>
             <input type="range" min="0" max="100" step="5" x-model.number="$store.simula.mortalidad" />
           </div>
 
-          <div class="control-group">
-            <label>Tiempo Enfermedad <span x-text="$store.simula.tiempoenfermedad"></span></label>
+          <div class="control-group-sidebar">
+            <div class="slider-header">
+              <span>Duración de Infección</span>
+              <span class="highlight-val" x-text="$store.simula.tiempoenfermedad + ' frames'"></span>
+            </div>
             <input type="range" min="50" max="1000" step="50" x-model.number="$store.simula.tiempoenfermedad" />
-          </div>
-
-          <div class="control-group">
-            <label>Velocidad <span x-text="$store.simula.velocidad + 'x'"></span></label>
-            <input type="range" min="0.5" max="3" step="0.1" x-model.number="$store.simula.velocidad" />
-          </div>
-
-          <div class="control-group checkbox-group">
-            <input type="checkbox" id="zombieCheck" x-model="$store.simula.modozombie" />
-            <label for="zombieCheck" style="margin-left: 0.5rem; color: var(--text-primary);">Modo Zombie 🧟‍♂️</label>
           </div>
         </div>
 
-        <button @click="Reinicia()">Reiniciar Simulación</button>
+        <div class="controls-section">
+          <h3>Simulación y Entorno</h3>
+          
+          <div class="control-group-sidebar">
+            <div class="slider-header">
+              <span>Velocidad de Movimiento</span>
+              <span class="highlight-val" x-text="$store.simula.velocidad + 'x'"></span>
+            </div>
+            <input type="range" min="0.5" max="4" step="0.1" x-model.number="$store.simula.velocidad" />
+          </div>
+
+          <div class="control-group-sidebar toggle-item">
+            <div class="toggle-label">
+              <span>Modo Zombie 🧟‍♂️</span>
+              <p class="toggle-desc">Cuerpos caminan e infectan</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" x-model="$store.simula.modozombie" />
+              <span class="slider-switch round"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="btn-reset glow-button" @click="Reinicia()">
+          <span>🔄</span> Reiniciar Simulación
+        </button>
+      </div>
+    </aside>
+
+    <!-- Top Action/Timeline Bar (Play/Pause/Step/Status) -->
+    <div class="top-action-bar">
+      <!-- Status Badge -->
+      <div class="status-badge" :class="{
+        'running': !$store.simula.pausado && !$store.simula.terminado,
+        'paused': $store.simula.pausado && !$store.simula.terminado,
+        'finished': $store.simula.terminado
+      }">
+        <span class="status-dot"></span>
+        <span class="status-text" x-text="$store.simula.terminado ? 'Finalizado' : ($store.simula.pausado ? 'Pausado' : 'Ejecutando')"></span>
+      </div>
+
+      <div class="vertical-divider"></div>
+
+      <!-- Action Buttons -->
+      <div class="action-buttons">
+        <!-- Play / Pause -->
+        <button class="action-btn" @click="$store.simula.pausado = !$store.simula.pausado" :disabled="$store.simula.terminado" :title="$store.simula.pausado ? 'Reanudar Simulación' : 'Pausar Simulación'">
+          <!-- Pause Icon (when playing) -->
+          <svg x-show="!$store.simula.pausado" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="svg-icon">
+            <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" />
+          </svg>
+          <!-- Play Icon (when paused) -->
+          <svg x-show="$store.simula.pausado" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="svg-icon" x-cloak>
+            <path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
+          </svg>
+        </button>
+
+        <!-- Step Forward -->
+        <button class="action-btn" @click="$store.simula.shouldStep = true" :disabled="!$store.simula.pausado || $store.simula.terminado" title="Avanzar 1 fotograma (Frame-by-frame)">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="svg-icon">
+            <path d="M5.055 7.06c-1.25-.714-2.805.189-2.805 1.628v6.623c0 1.44 1.555 2.342 2.805 1.628l5.83-3.331a1.866 1.866 0 0 0 0-3.256l-5.83-3.331ZM13.805 7.06c-1.25-.714-2.805.189-2.805 1.628v6.623c0 1.44 1.555 2.342 2.805 1.628l5.83-3.331a1.866 1.866 0 0 0 0-3.256l-5.83-3.331Z" />
+            <path d="M22.5 6.75a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5a.75.75 0 0 1 .75-.75Z" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="vertical-divider"></div>
+
+      <!-- Quick Speed Controls -->
+      <div class="speed-presets">
+        <button class="speed-btn" :class="{ 'active': $store.simula.velocidad === 0.5 }" @click="$store.simula.velocidad = 0.5">0.5x</button>
+        <button class="speed-btn" :class="{ 'active': $store.simula.velocidad === 1.0 }" @click="$store.simula.velocidad = 1.0">1.0x</button>
+        <button class="speed-btn" :class="{ 'active': $store.simula.velocidad === 1.5 }" @click="$store.simula.velocidad = 1.5">1.5x</button>
+        <button class="speed-btn" :class="{ 'active': $store.simula.velocidad === 2.5 }" @click="$store.simula.velocidad = 2.5">2.5x</button>
       </div>
     </div>
 
-    <!-- Info Overlay -->
+    <!-- Right Side Dashboard: Stats Panel -->
+    <aside class="stats-sidebar">
+      <div class="panel-header">
+        <h3>Monitoreo Epidémico</h3>
+      </div>
+
+      <!-- Live Counters Grid -->
+      <div class="stats-vertical-grid">
+        <div class="stat-row sano">
+          <div class="stat-row-meta">
+            <span class="dot"></span>
+            <span class="label">Sanos</span>
+          </div>
+          <div class="stat-row-values">
+            <span class="value" x-text="$store.simula.contadores.sanos || 0"></span>
+            <span class="percentage" x-text="Math.round((($store.simula.contadores.sanos || 0) / $store.simula.poblacion) * 100) + '%'"></span>
+          </div>
+        </div>
+
+        <div class="stat-row enfermo">
+          <div class="stat-row-meta">
+            <span class="dot animate-ping-custom"></span>
+            <span class="label">Infectados</span>
+          </div>
+          <div class="stat-row-values">
+            <span class="value" x-text="$store.simula.contadores.enfermos || 0"></span>
+            <span class="percentage" x-text="Math.round((($store.simula.contadores.enfermos || 0) / $store.simula.poblacion) * 100) + '%'"></span>
+          </div>
+        </div>
+
+        <div class="stat-row recuperado">
+          <div class="stat-row-meta">
+            <span class="dot"></span>
+            <span class="label">Recuperados</span>
+          </div>
+          <div class="stat-row-values">
+            <span class="value" x-text="$store.simula.contadores.recuperados || 0"></span>
+            <span class="percentage" x-text="Math.round((($store.simula.contadores.recuperados || 0) / $store.simula.poblacion) * 100) + '%'"></span>
+          </div>
+        </div>
+
+        <div class="stat-row muerto">
+          <div class="stat-row-meta">
+            <span class="dot"></span>
+            <span class="label">Fallecidos</span>
+          </div>
+          <div class="stat-row-values">
+            <span class="value" x-text="$store.simula.contadores.muertos || 0"></span>
+            <span class="percentage" x-text="Math.round((($store.simula.contadores.muertos || 0) / $store.simula.poblacion) * 100) + '%'"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced Epidemiological Insights -->
+      <div class="advanced-insights">
+        <div class="insight-card r0-card" :class="{ 'danger': parseFloat($store.simula.r0) >= 1.0, 'safe': parseFloat($store.simula.r0) < 1.0 }">
+          <div class="insight-header">
+            <span>Transmisibilidad R₀</span>
+            <div class="tooltip-trigger">ⓘ
+              <span class="tooltip-text">Número de reproducción básico real en el simulador. R₀ > 1 indica propagación exponencial; R₀ < 1 indica remisión.</span>
+            </div>
+          </div>
+          <div class="insight-value" x-text="$store.simula.r0"></div>
+          <div class="insight-footer" x-text="parseFloat($store.simula.r0) >= 1.0 ? 'Expansión Activa 📈' : 'Infección Controlada 📉'"></div>
+        </div>
+
+        <div class="insight-card peak-card">
+          <div class="insight-header">
+            <span>Pico Máximo</span>
+          </div>
+          <div class="insight-value" x-text="$store.simula.picoEnfermos"></div>
+          <div class="insight-footer" x-text="'Alcanzó el ' + $store.simula.picoEnfermosPct + '% de infectados'"></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Bottom Drawer: Epidemiological Curve (ApexChart) -->
+    <div class="chart-drawer" :class="{ 'expanded': showChart }">
+      <button class="drawer-handle" @click="showChart = !showChart">
+        <span class="handle-icon" x-text="showChart ? '▼' : '▲'">▲</span>
+        <span class="handle-text" x-text="showChart ? 'Ocultar Curva Epidemiológica' : 'Ver Curva Epidemiológica (Gráfica en Tiempo Real)'"></span>
+      </button>
+      <div class="drawer-body">
+        <div id="chart-container"></div>
+      </div>
+    </div>
+
+    <!-- Info Overlay (Top Right) -->
     <div class="info-overlay">
-      <button class="info-toggle" @click="showInfo = !showInfo">ℹ</button>
+      <button class="info-toggle" @click="showInfo = !showInfo" aria-label="Información">ℹ</button>
       
       <div class="info-content" x-show="showInfo" @click.away="showInfo = false" x-transition x-cloak>
-        <h2>EpidemicSim</h2>
-        <p>Simulador estocástico de propagación viral utilizando modelos basados en agentes y optimización QuadTree.</p>
+        <h2>EpidemicSim v2.0</h2>
+        <p>Modelado matemático del contagio por contacto directo usando agentes cinéticos y aceleración de QuadTree.</p>
         
-        <h3>Leyenda</h3>
+        <h3>Leyenda de Sujetos</h3>
         <div class="legend-item">
           <div class="dot" style="background: var(--accent-sano)"></div>
-          <span>Sanos (Susceptibles)</span>
+          <span>Sanos (Susceptibles a contagio)</span>
         </div>
         <div class="legend-item">
           <div class="dot" style="background: var(--accent-enfermo)"></div>
-          <span>Enfermos (Infectados)</span>
+          <span>Infectados (Con aura pulsante)</span>
         </div>
         <div class="legend-item">
           <div class="dot" style="background: var(--accent-recuperado)"></div>
@@ -125,11 +281,16 @@
         </div>
         <div class="legend-item">
           <div class="dot" style="background: var(--accent-muerto)"></div>
-          <span>Fallecidos</span>
+          <span>Fallecidos (Inmóviles por defecto)</span>
         </div>
 
-        <p style="margin-top: 1rem; font-size: 0.75rem;">
-          * En <strong>Modo Zombie</strong>, los fallecidos continúan moviéndose y propagando la infección.
+        <div class="legend-item" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color)">
+          <div class="dashed-circle-preview"></div>
+          <span>Aislamiento (Quarantine Field)</span>
+        </div>
+
+        <p class="legend-note">
+          * En <strong>Modo Zombie</strong>, los agentes fallecidos no quedan inmóviles; vagan indefinidamente y transmiten la infección en contacto.
         </p>
       </div>
     </div>

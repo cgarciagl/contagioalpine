@@ -16,10 +16,16 @@ document.addEventListener("alpine:init", () => {
     poblacion: DEFAULT_POBLACION,
     encuarentena: DEFAULT_ENCUARENTENA,
     terminado: false,
+    pausado: false,
+    shouldStep: false,
     tiempoenfermedad: DEFAULT_TIEMPO_ENFERMEDAD,
     modozombie: DEFAULT_MODO_ZOMBIE,
     mortalidad: DEFAULT_MORTALIDAD,
+    tasacontagio: 90,
     velocidad: 1.5,
+    r0: "0.00",
+    picoEnfermos: 0,
+    picoEnfermosPct: 0,
     contadores: { sanos: 0, enfermos: 0, recuperados: 0, muertos: 0 },
     personas: [],
   });
@@ -43,9 +49,29 @@ function windowResized() {
 }
 
 function draw() {
-  background("#0f172a"); 
+  background("#0b0f19"); 
   
-  checarColisionesyActualizaContadores();
+  if (root) {
+    if (!root.pausado && !root.terminado) {
+      checarColisionesyActualizaContadores();
+    } else if (root.shouldStep) {
+      checarColisionesyActualizaContadores();
+      root.shouldStep = false;
+    } else {
+      // Dibujar estáticamente cuando está pausado
+      for (let persona of root.personas) {
+        persona.dibuja();
+      }
+    }
+  }
+}
+
+function calcularR0() {
+  if (!root || !root.personas || root.personas.length === 0) return 0;
+  const everInfected = root.personas.filter(p => p.estado !== ESTADOS.SANO);
+  if (everInfected.length === 0) return 0;
+  const sum = everInfected.reduce((acc, p) => acc + (p.infectadosDirectos || 0), 0);
+  return sum / everInfected.length;
 }
 
 function checarColisionesyActualizaContadores() {
@@ -68,6 +94,15 @@ function checarColisionesyActualizaContadores() {
 
   // Update store only once per frame
   root.contadores = currentContadores;
+
+  // Actualizar estadísticas avanzadas
+  const r0Val = calcularR0();
+  root.r0 = r0Val.toFixed(2);
+
+  if (currentContadores.enfermos > root.picoEnfermos) {
+    root.picoEnfermos = currentContadores.enfermos;
+    root.picoEnfermosPct = Math.round((root.picoEnfermos / root.poblacion) * 100);
+  }
 
   for (let persona of root.personas) {
     // Instanciar Circle de forma limpia para evitar problemas con estados compartidos de consulta
@@ -92,21 +127,31 @@ function checarColisionesyActualizaContadores() {
 }
 
 function Reinicia() {
+  if (!root) return;
+
   root.personas = [];
+  root.picoEnfermos = 0;
+  root.picoEnfermosPct = 0;
+  root.r0 = "0.00";
+
   for (let i = 0; i < root.poblacion; i++) {
     root.personas.push(new Persona(random(width), random(height)));
   }
   
   // Infect the first person
-  root.personas[0].setEstado(ESTADOS.ENFERMO);
+  if (root.personas.length > 0) {
+    root.personas[0].setEstado(ESTADOS.ENFERMO);
+  }
   
   // Set quarantine
   const numQuarantine = Math.floor((root.encuarentena * root.poblacion) / 100);
-  for (let i = 1; i <= numQuarantine; i++) {
+  for (let i = 1; i <= numQuarantine && i < root.personas.length; i++) {
     root.personas[i].movible = false;
   }
 
   root.terminado = false;
+  root.pausado = false;
+  root.shouldStep = false;
   totalSimulationPopulation = root.poblacion;
 
   history = { sanos: [], enfermos: [], recuperados: [], muertos: [] };

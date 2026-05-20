@@ -27,6 +27,8 @@ class Persona {
     this.estado = ESTADOS.SANO;
     this.tiempoenfermo = 0;
     this.movible = true;
+    this.infectadosDirectos = 0;
+    this.infectadoPor = null;
 
     // Optimización: punto de Quadtree pre-guardado para evitar 'new Point' en cada frame
     this.quadTreePoint = new Point(x, y, this);
@@ -48,13 +50,46 @@ class Persona {
   }
 
   dibuja() {
-    push();
-    noStroke();
-    
     const rgb = colorEstadoRGB[this.estado];
 
+    // 1. Dibujar auras de contagio pulsantes
+    if (this.estado === ESTADOS.ENFERMO) {
+      push();
+      noStroke();
+      const pulse = sin(frameCount * 0.1) * 3 + 5;
+      fill(rgb[0], rgb[1], rgb[2], 30);
+      ellipse(this.pos.x, this.pos.y, (this.radio + pulse) * 2, (this.radio + pulse) * 2);
+      pop();
+    } else if (this.estado === ESTADOS.MUERTO && this.movible) {
+      push();
+      noStroke();
+      const zombiePulse = sin(frameCount * 0.15) * 2 + 4;
+      fill(16, 185, 129, 45); // Brillo verde zombi
+      ellipse(this.pos.x, this.pos.y, (this.radio + zombiePulse) * 2, (this.radio + zombiePulse) * 2);
+      pop();
+    }
+
+    // 2. Dibujar anillo de cuarentena
+    if (!this.movible && this.estado !== ESTADOS.MUERTO) {
+      push();
+      noFill();
+      stroke(rgb[0], rgb[1], rgb[2], 180);
+      strokeWeight(1.5);
+      if (drawingContext && drawingContext.setLineDash) {
+        drawingContext.setLineDash([4, 3]);
+      }
+      ellipse(this.pos.x, this.pos.y, (this.radio + 4) * 2, (this.radio + 4) * 2);
+      if (drawingContext && drawingContext.setLineDash) {
+        drawingContext.setLineDash([]);
+      }
+      pop();
+    }
+
+    // 3. Dibujar el cuerpo del agente
+    push();
+    noStroke();
     fill(rgb[0], rgb[1], rgb[2]);
-    stroke(255, 80);
+    stroke(255, 120);
     strokeWeight(1);
     ellipse(this.pos.x, this.pos.y, this.radio * 2, this.radio * 2);
     pop();
@@ -95,6 +130,11 @@ class Persona {
         this.setEstado(ESTADOS.RECUPERADO);
       }
     }
+
+    // Registrar los contagios directos que realizó este agente para calcular el R0
+    if (window.registrarResolucionInfeccion) {
+      window.registrarResolucionInfeccion(this.infectadosDirectos);
+    }
   }
 
   rebotarConParedes() {
@@ -131,15 +171,20 @@ class Persona {
         p.pos.y -= moveY;
       }
 
-      // Infection logic
-      if (this.estado === ESTADOS.ENFERMO || p.estado === ESTADOS.ENFERMO) {
-        this.intentarContagio();
-        p.intentarContagio();
+      // Lógica de infección direccional con rastreo para R0
+      if (this.estado === ESTADOS.ENFERMO && p.estado === ESTADOS.SANO) {
+        p.intentarContagio(this);
+      } else if (p.estado === ESTADOS.ENFERMO && this.estado === ESTADOS.SANO) {
+        this.intentarContagio(p);
       }
 
-      if (root.modozombie && (this.estado === ESTADOS.MUERTO || p.estado === ESTADOS.MUERTO)) {
-        this.intentarContagio();
-        p.intentarContagio();
+      // Modo Zombie
+      if (root.modozombie) {
+        if (this.estado === ESTADOS.MUERTO && this.movible && p.estado === ESTADOS.SANO) {
+          p.intentarContagio(this);
+        } else if (p.estado === ESTADOS.MUERTO && p.movible && this.estado === ESTADOS.SANO) {
+          this.intentarContagio(p);
+        }
       }
 
       // Simple elastic collision response (randomized for variety)
@@ -148,9 +193,17 @@ class Persona {
     }
   }
 
-  intentarContagio() {
+  intentarContagio(infector) {
     if (this.estado === ESTADOS.SANO) {
-      this.setEstado(ESTADOS.ENFERMO);
+      const prob = root.tasacontagio !== undefined ? root.tasacontagio : 100;
+      if (random(0, 100) <= prob) {
+        this.setEstado(ESTADOS.ENFERMO);
+        this.tiempoenfermo = 0;
+        if (infector) {
+          this.infectadoPor = infector;
+          infector.infectadosDirectos = (infector.infectadosDirectos || 0) + 1;
+        }
+      }
     }
   }
 }
