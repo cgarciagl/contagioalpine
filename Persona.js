@@ -5,19 +5,12 @@ const ESTADOS = Object.freeze({
   MUERTO: "muerto",
 });
 
-const colorEstado = {
-  [ESTADOS.SANO]: "#3b82f6",      // Azul
-  [ESTADOS.ENFERMO]: "#f43f5e",   // Rojo/Rosa
-  [ESTADOS.RECUPERADO]: "#10b981", // Verde
-  [ESTADOS.MUERTO]: "#64748b",    // Gris
-};
-
-const colorEstadoRGB = {
-  [ESTADOS.SANO]: [59, 130, 246],      // #3b82f6
-  [ESTADOS.ENFERMO]: [244, 63, 94],    // #f43f5e
-  [ESTADOS.RECUPERADO]: [16, 185, 129], // #10b981
-  [ESTADOS.MUERTO]: [100, 116, 139],    // #64748b
-};
+const COLOR_ESTADO = Object.freeze({
+  [ESTADOS.SANO]:       { hex: "#3b82f6", rgb: [59, 130, 246] },
+  [ESTADOS.ENFERMO]:    { hex: "#f43f5e", rgb: [244, 63, 94] },
+  [ESTADOS.RECUPERADO]: { hex: "#10b981", rgb: [16, 185, 129] },
+  [ESTADOS.MUERTO]:     { hex: "#64748b", rgb: [100, 116, 139] },
+});
 
 class Persona {
   constructor(x, y) {
@@ -25,67 +18,70 @@ class Persona {
     this.vel = createVector(random(-4, 4), random(-4, 4));
     this.radio = 4;
     this.estado = ESTADOS.SANO;
-    this.tiempoenfermo = 0;
+    this.tiempoEnfermo = 0;
     this.movible = true;
     this.infectadosDirectos = 0;
     this.infectadoPor = null;
 
-    // Optimización: punto de Quadtree pre-guardado para evitar 'new Point' en cada frame
+    // Punto de Quadtree pre-guardado para evitar 'new Point' en cada frame
     this.quadTreePoint = new Point(x, y, this);
   }
 
   setEstado(nuevoEstado) {
     this.estado = nuevoEstado;
     if (nuevoEstado === ESTADOS.MUERTO) {
-      this.movible = !!root.modozombie;
-      if (!root.modozombie) {
+      this.movible = Boolean(simulationStore.modozombie);
+      if (!simulationStore.modozombie) {
         this.vel.mult(0);
       }
     }
-    
-    // Slow down recovered or dead
+
     if (nuevoEstado === ESTADOS.RECUPERADO) {
       this.vel.mult(0.5);
     }
   }
 
-  dibuja() {
-    const rgb = colorEstadoRGB[this.estado];
+  // --- Dibujo ---
 
-    // 1. Dibujar auras de contagio pulsantes
+  dibuja() {
+    const rgb = COLOR_ESTADO[this.estado].rgb;
+    this._dibujarAura(rgb);
+    this._dibujarAnilloCuarentena(rgb);
+    this._dibujarCuerpo(rgb);
+  }
+
+  _dibujarAura(rgb) {
     if (this.estado === ESTADOS.ENFERMO) {
       push();
       noStroke();
-      const pulse = sin(frameCount * 0.1) * 3 + 5;
+      const pulso = sin(frameCount * 0.1) * 3 + 5;
       fill(rgb[0], rgb[1], rgb[2], 30);
-      ellipse(this.pos.x, this.pos.y, (this.radio + pulse) * 2, (this.radio + pulse) * 2);
+      ellipse(this.pos.x, this.pos.y, (this.radio + pulso) * 2, (this.radio + pulso) * 2);
       pop();
     } else if (this.estado === ESTADOS.MUERTO && this.movible) {
       push();
       noStroke();
-      const zombiePulse = sin(frameCount * 0.15) * 2 + 4;
-      fill(16, 185, 129, 45); // Brillo verde zombi
-      ellipse(this.pos.x, this.pos.y, (this.radio + zombiePulse) * 2, (this.radio + zombiePulse) * 2);
+      const pulsoZombi = sin(frameCount * 0.15) * 2 + 4;
+      fill(16, 185, 129, 45);
+      ellipse(this.pos.x, this.pos.y, (this.radio + pulsoZombi) * 2, (this.radio + pulsoZombi) * 2);
       pop();
     }
+  }
 
-    // 2. Dibujar anillo de cuarentena
-    if (!this.movible && this.estado !== ESTADOS.MUERTO) {
-      push();
-      noFill();
-      stroke(rgb[0], rgb[1], rgb[2], 180);
-      strokeWeight(1.5);
-      if (drawingContext && drawingContext.setLineDash) {
-        drawingContext.setLineDash([4, 3]);
-      }
-      ellipse(this.pos.x, this.pos.y, (this.radio + 4) * 2, (this.radio + 4) * 2);
-      if (drawingContext && drawingContext.setLineDash) {
-        drawingContext.setLineDash([]);
-      }
-      pop();
-    }
+  _dibujarAnilloCuarentena(rgb) {
+    if (this.movible || this.estado === ESTADOS.MUERTO) return;
 
-    // 3. Dibujar el cuerpo del agente
+    push();
+    noFill();
+    stroke(rgb[0], rgb[1], rgb[2], 180);
+    strokeWeight(1.5);
+    this._aplicarLineaDiscontinua([4, 3]);
+    ellipse(this.pos.x, this.pos.y, (this.radio + 4) * 2, (this.radio + 4) * 2);
+    this._aplicarLineaDiscontinua([]);
+    pop();
+  }
+
+  _dibujarCuerpo(rgb) {
     push();
     noStroke();
     fill(rgb[0], rgb[1], rgb[2]);
@@ -95,24 +91,31 @@ class Persona {
     pop();
   }
 
+  _aplicarLineaDiscontinua(patron) {
+    if (drawingContext && drawingContext.setLineDash) {
+      drawingContext.setLineDash(patron);
+    }
+  }
+
+  // --- Actualización ---
+
   update() {
     if (this.movible) {
-      // Aritmética directa de componentes (evita instanciar un nuevo vector con p5.Vector.mult)
-      const velFactor = root.velocidad || 1;
-      this.pos.x += this.vel.x * velFactor;
-      this.pos.y += this.vel.y * velFactor;
-
+      const factorVelocidad = simulationStore.velocidad || 1;
+      const oldX = this.pos.x;
+      const oldY = this.pos.y;
+      this.pos.x += this.vel.x * factorVelocidad;
+      this.pos.y += this.vel.y * factorVelocidad;
       this.rebotarConParedes();
-      this.rebotarConBarreras();
+      this.rebotarConBarreras(oldX, oldY);
     }
 
-    // Mantener la posición del punto Quadtree sincronizada para la detección de colisiones
     this.quadTreePoint.x = this.pos.x;
     this.quadTreePoint.y = this.pos.y;
 
     if (this.estado === ESTADOS.ENFERMO) {
-      this.tiempoenfermo++;
-      if (this.tiempoenfermo > root.tiempoenfermedad) {
+      this.tiempoEnfermo++;
+      if (this.tiempoEnfermo > simulationStore.tiempoenfermedad) {
         this.resolverEnfermedad();
       }
     }
@@ -120,23 +123,23 @@ class Persona {
     this.dibuja();
   }
 
+  // --- Resolución de enfermedad ---
+
   resolverEnfermedad() {
-    if (random(0, 100) <= root.mortalidad) {
+    if (random(0, 100) <= simulationStore.mortalidad) {
+      this.setEstado(ESTADOS.MUERTO);
+    } else if (simulationStore.modozombie) {
       this.setEstado(ESTADOS.MUERTO);
     } else {
-      // In zombie mode, everyone who would be "recovered" becomes dead but movible
-      if (root.modozombie) {
-        this.setEstado(ESTADOS.MUERTO);
-      } else {
-        this.setEstado(ESTADOS.RECUPERADO);
-      }
+      this.setEstado(ESTADOS.RECUPERADO);
     }
 
-    // Registrar los contagios directos que realizó este agente para calcular el R0
     if (window.registrarResolucionInfeccion) {
       window.registrarResolucionInfeccion(this.infectadosDirectos);
     }
   }
+
+  // --- Rebote con bordes del canvas ---
 
   rebotarConParedes() {
     if (this.pos.x < this.radio || this.pos.x > width - this.radio) {
@@ -149,112 +152,185 @@ class Persona {
     }
   }
 
-  rebotarConBarreras() {
-    if (!root || !root.barreras || root.barreras.length === 0) return;
+  // --- Rebote con barreras (colisión continua para evitar atravesar muros) ---
 
-    for (let b of root.barreras) {
-      const abx = b.x2 - b.x1;
-      const aby = b.y2 - b.y1;
-      
-      const apx = this.pos.x - b.x1;
-      const apy = this.pos.y - b.y1;
+  rebotarConBarreras(oldX, oldY) {
+    if (!simulationStore || !simulationStore.barreras || simulationStore.barreras.length === 0) return;
 
-      const ab2 = abx * abx + aby * aby;
-      if (ab2 === 0) continue;
+    const movX = this.pos.x - oldX;
+    const movY = this.pos.y - oldY;
+    const movLen = Math.sqrt(movX * movX + movY * movY);
 
-      let t = (apx * abx + apy * aby) / ab2;
-      t = constrain(t, 0, 1);
-
-      const closestX = b.x1 + t * abx;
-      const closestY = b.y1 + t * aby;
-
-      const dx = this.pos.x - closestX;
-      const dy = this.pos.y - closestY;
-      const distSq = dx * dx + dy * dy;
-
-      const r = this.radio;
-      if (distSq < r * r) {
-        const d = Math.sqrt(distSq);
-        
-        if (d > 0) {
-          const overlap = r - d;
-          this.pos.x += (dx / d) * overlap;
-          this.pos.y += (dy / d) * overlap;
-
-          const nx = dx / d;
-          const ny = dy / d;
-
-          const dot = this.vel.x * nx + this.vel.y * ny;
-          if (dot < 0) {
-            this.vel.x = this.vel.x - 2 * dot * nx;
-            this.vel.y = this.vel.y - 2 * dot * ny;
-          }
-        } else {
-          this.pos.x += random(-1, 1) * r;
-          this.pos.y += random(-1, 1) * r;
-          this.vel.x *= -1;
-          this.vel.y *= -1;
-        }
+    if (movLen < 0.001) {
+      // Sin movimiento: resolver superposiciones existentes
+      for (const barrera of simulationStore.barreras) {
+        this._resolverSuperposicionEstatica(barrera);
       }
+      return;
+    }
+
+    const movDirX = movX / movLen;
+    const movDirY = movY / movLen;
+
+    for (const barrera of simulationStore.barreras) {
+      this._colisionContinuaConBarrera(barrera, oldX, oldY, movDirX, movDirY, movLen);
     }
   }
 
-  colisiona(p) {
-    // Optimización: Primero verificar con la distancia al cuadrado (evita Math.sqrt/dist en la mayoría de casos)
-    const dx = this.pos.x - p.pos.x;
-    const dy = this.pos.y - p.pos.y;
-    const dSq = dx * dx + dy * dy;
-    const minD = this.radio + p.radio;
-    const minDSq = minD * minD;
-    
-    if (dSq < minDSq) {
-      const d = Math.sqrt(dSq);
-      // Prevent overlapping
-      const overlap = minD - d;
-      
-      // Optimización: Aritmética directa de componentes (evita instanciar p5.Vector y .setMag)
-      if (d > 0) {
-        const moveX = (dx / d) * (overlap / 2);
-        const moveY = (dy / d) * (overlap / 2);
-        this.pos.x += moveX;
-        this.pos.y += moveY;
-        p.pos.x -= moveX;
-        p.pos.y -= moveY;
-      }
+  _colisionContinuaConBarrera(barrera, oldX, oldY, movDirX, movDirY, movLen) {
+    const barX = barrera.x2 - barrera.x1;
+    const barY = barrera.y2 - barrera.y1;
+    const barLenSq = barX * barX + barY * barY;
+    if (barLenSq < 0.001) return;
 
-      // Lógica de infección direccional con rastreo para R0
-      if (this.estado === ESTADOS.ENFERMO && p.estado === ESTADOS.SANO) {
-        p.intentarContagio(this);
-      } else if (p.estado === ESTADOS.ENFERMO && this.estado === ESTADOS.SANO) {
-        this.intentarContagio(p);
-      }
+    // Componente del movimiento perpendicular a la barrera
+    const crossMov = movDirX * barY - movDirY * barX;
+    if (Math.abs(crossMov) < 0.0001) return; // Movimiento paralelo
 
-      // Modo Zombie
-      if (root.modozombie) {
-        if (this.estado === ESTADOS.MUERTO && this.movible && p.estado === ESTADOS.SANO) {
-          p.intentarContagio(this);
-        } else if (p.estado === ESTADOS.MUERTO && p.movible && this.estado === ESTADOS.SANO) {
-          this.intentarContagio(p);
-        }
-      }
+    const startX = oldX - barrera.x1;
+    const startY = oldY - barrera.y1;
+    const crossStart = startX * barY - startY * barX;
+    const tHit = -crossStart / crossMov;
 
-      // Simple elastic collision response (randomized for variety)
-      this.vel.rotate(random(-PI/8, PI/8));
-      p.vel.rotate(random(-PI/8, PI/8));
+    // Verificar si la colisión ocurre dentro del frame
+    if (tHit < -this.radio || tHit > movLen + this.radio) return;
+
+    // Punto de colisión (clamped al trayecto)
+    const tClamped = constrain(tHit, 0, movLen);
+    const hitX = oldX + movDirX * tClamped;
+    const hitY = oldY + movDirY * tClamped;
+
+    // Punto más cercano en la barrera al punto de colisión
+    const apX = hitX - barrera.x1;
+    const apY = hitY - barrera.y1;
+    let proj = (apX * barX + apY * barY) / barLenSq;
+    proj = constrain(proj, 0, 1);
+
+    const closestX = barrera.x1 + proj * barX;
+    const closestY = barrera.y1 + proj * barY;
+    const dx = hitX - closestX;
+    const dy = hitY - closestY;
+    const distSq = dx * dx + dy * dy;
+
+    // Solo colisionar si la partícula realmente toca la barrera
+    if (distSq >= this.radio * this.radio) return;
+
+    const dist = Math.sqrt(distSq);
+
+    if (dist > 0.001) {
+      // Posicionar partícula en el punto de colisión + separación
+      const nx = dx / dist;
+      const ny = dy / dist;
+      this.pos.x = closestX + nx * (this.radio + 0.5);
+      this.pos.y = closestY + ny * (this.radio + 0.5);
+
+      // Reflejar velocidad
+      const dot = this.vel.x * nx + this.vel.y * ny;
+      if (dot < 0) {
+        this.vel.x -= 2 * dot * nx;
+        this.vel.y -= 2 * dot * ny;
+      }
+    } else {
+      // Caso degenerado: empujar en dirección del movimiento
+      this.pos.x = hitX - movDirX * this.radio;
+      this.pos.y = hitY - movDirY * this.radio;
+      this.vel.x *= -1;
+      this.vel.y *= -1;
     }
   }
+
+  _resolverSuperposicionEstatica(barrera) {
+    const barX = barrera.x2 - barrera.x1;
+    const barY = barrera.y2 - barrera.y1;
+    const barLenSq = barX * barX + barY * barY;
+    if (barLenSq < 0.001) return;
+
+    const apX = this.pos.x - barrera.x1;
+    const apY = this.pos.y - barrera.y1;
+    let proj = (apX * barX + apY * barY) / barLenSq;
+    proj = constrain(proj, 0, 1);
+
+    const closestX = barrera.x1 + proj * barX;
+    const closestY = barrera.y1 + proj * barY;
+    const dx = this.pos.x - closestX;
+    const dy = this.pos.y - closestY;
+    const distSq = dx * dx + dy * dy;
+
+    if (distSq >= this.radio * this.radio || distSq < 0.001) return;
+
+    const dist = Math.sqrt(distSq);
+    const overlap = this.radio - dist;
+    this.pos.x += (dx / dist) * overlap;
+    this.pos.y += (dy / dist) * overlap;
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const dot = this.vel.x * nx + this.vel.y * ny;
+    if (dot < 0) {
+      this.vel.x -= 2 * dot * nx;
+      this.vel.y -= 2 * dot * ny;
+    }
+  }
+
+  // --- Colisión con otra persona ---
+
+  colisiona(otraPersona) {
+    const dx = this.pos.x - otraPersona.pos.x;
+    const dy = this.pos.y - otraPersona.pos.y;
+    const distanciaCuadrada = dx * dx + dy * dy;
+    const distanciaMinima = this.radio + otraPersona.radio;
+    const distanciaMinimaCuadrada = distanciaMinima * distanciaMinima;
+
+    if (distanciaCuadrada >= distanciaMinimaCuadrada) return;
+
+    const distancia = Math.sqrt(distanciaCuadrada);
+    this._resolverSuperposicionMutua(otraPersona, dx, dy, distancia, distanciaMinima);
+    this._intentarContagioMutuo(otraPersona);
+
+    // Colisión elástica con rotación aleatoria para variedad
+    this.vel.rotate(random(-PI / 8, PI / 8));
+    otraPersona.vel.rotate(random(-PI / 8, PI / 8));
+  }
+
+  _resolverSuperposicionMutua(otraPersona, dx, dy, distancia, distanciaMinima) {
+    if (distancia <= 0) return;
+
+    const overlap = distanciaMinima - distancia;
+    const moveX = (dx / distancia) * (overlap / 2);
+    const moveY = (dy / distancia) * (overlap / 2);
+    this.pos.x += moveX;
+    this.pos.y += moveY;
+    otraPersona.pos.x -= moveX;
+    otraPersona.pos.y -= moveY;
+  }
+
+  _intentarContagioMutuo(otraPersona) {
+    const thisEnfermo = this.estado === ESTADOS.ENFERMO;
+    const otraEnfermo = otraPersona.estado === ESTADOS.ENFERMO;
+    const thisZombi = simulationStore.modozombie && this.estado === ESTADOS.MUERTO && this.movible;
+    const otraZombi = simulationStore.modozombie && otraPersona.estado === ESTADOS.MUERTO && otraPersona.movible;
+
+    if ((thisEnfermo || thisZombi) && otraPersona.estado === ESTADOS.SANO) {
+      otraPersona.intentarContagio(this);
+    } else if ((otraEnfermo || otraZombi) && this.estado === ESTADOS.SANO) {
+      this.intentarContagio(otraPersona);
+    }
+  }
+
+  // --- Contagio ---
 
   intentarContagio(infector) {
-    if (this.estado === ESTADOS.SANO) {
-      const prob = root.tasacontagio !== undefined ? root.tasacontagio : 100;
-      if (random(0, 100) <= prob) {
-        this.setEstado(ESTADOS.ENFERMO);
-        this.tiempoenfermo = 0;
-        if (infector) {
-          this.infectadoPor = infector;
-          infector.infectadosDirectos = (infector.infectadosDirectos || 0) + 1;
-        }
-      }
+    if (this.estado !== ESTADOS.SANO) return;
+
+    const probabilidad = simulationStore.tasacontagio !== undefined ? simulationStore.tasacontagio : 100;
+    if (random(0, 100) > probabilidad) return;
+
+    this.setEstado(ESTADOS.ENFERMO);
+    this.tiempoEnfermo = 0;
+
+    if (infector) {
+      this.infectadoPor = infector;
+      infector.infectadosDirectos = (infector.infectadosDirectos || 0) + 1;
     }
   }
 }

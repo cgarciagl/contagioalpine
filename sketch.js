@@ -1,7 +1,6 @@
-let root;
+let simulationStore;
 let totalSimulationPopulation = 300;
 let history = { sanos: [], enfermos: [], recuperados: [], muertos: [] };
-let graphBuffer;
 let apexChart;
 
 let activeQuadTree;
@@ -13,6 +12,17 @@ const DEFAULT_TIEMPO_ENFERMEDAD = 150;
 const DEFAULT_MORTALIDAD = 50;
 const DEFAULT_MODO_ZOMBIE = false;
 const STORE_NAME = "simula";
+
+const HISTORY_SAMPLE_RATE = 30;
+const MIN_WALL_LENGTH = 10;
+const BRUSH_RADIUS = 25;
+
+const COUNTER_KEY_BY_STATE = Object.freeze({
+  [ESTADOS.SANO]:       "sanos",
+  [ESTADOS.ENFERMO]:    "enfermos",
+  [ESTADOS.RECUPERADO]: "recuperados",
+  [ESTADOS.MUERTO]:     "muertos",
+});
 
 document.addEventListener("alpine:init", () => {
   Alpine.store(STORE_NAME, {
@@ -35,179 +45,194 @@ document.addEventListener("alpine:init", () => {
     barreras: [],
   });
 
-  root = Alpine.store(STORE_NAME);
+  simulationStore = Alpine.store(STORE_NAME);
 });
 
 function setup() {
   const canvas = createCanvas(windowWidth, windowHeight);
   canvas.parent("dataviz");
-  
+
   initChart();
-  Reinicia();
+  reiniciarSimulacion();
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   if (apexChart) {
-    apexChart.render(); // Redraw chart for new dimensions
+    apexChart.render();
   }
 }
 
 function draw() {
-  background("#0b0f19"); 
-  
-  if (root) {
-    // Manejo de cursores contextuales según la herramienta activa
-    if (mouseClickInsideCanvas()) {
-      if (root.herramienta === 'ninguna') {
-        cursor(ARROW);
-      } else if (root.herramienta === 'muro') {
-        cursor(CROSS);
-      } else if (root.herramienta === 'vacuna' || root.herramienta === 'infecta') {
-        noCursor();
-      }
-    } else {
-      cursor(ARROW);
-    }
+  background("#0b0f19");
 
-    if (!root.pausado && !root.terminado) {
-      checarColisionesyActualizaContadores();
-    } else if (root.shouldStep) {
-      checarColisionesyActualizaContadores();
-      root.shouldStep = false;
+  if (simulationStore) {
+    updateCursor();
+
+    if (!simulationStore.pausado && !simulationStore.terminado) {
+      simulateFrame();
+    } else if (simulationStore.shouldStep) {
+      simulateFrame();
+      simulationStore.shouldStep = false;
     } else {
-      // Dibujar estáticamente cuando está pausado
-      for (let persona of root.personas) {
+      for (let persona of simulationStore.personas) {
         persona.dibuja();
       }
     }
 
-    // Dibujar barreras y previsualizaciones
     dibujaBarreras();
     dibujaPrevisualizacionMuro();
     dibujaCursorPincel();
   }
 }
 
+function updateCursor() {
+  if (!mouseClickInsideCanvas()) {
+    cursor(ARROW);
+    return;
+  }
+  if (simulationStore.herramienta === 'muro') {
+    cursor(CROSS);
+  } else if (simulationStore.herramienta === 'vacuna' || simulationStore.herramienta === 'infecta') {
+    noCursor();
+  } else {
+    cursor(ARROW);
+  }
+}
+
+function simulateFrame() {
+  const quadtree = buildQuadTree();
+  activeQuadTree = quadtree;
+
+  const counters = updatePersonasAndCount(quadtree);
+  simulationStore.contadores = counters;
+
+  resolveCollisions(quadtree);
+  updateAdvancedStats(counters);
+  checkSimulationEnd(counters);
+  updateHistory();
+}
+
+function buildQuadTree() {
+  // Rectangle must be instantiated so left/right/top/bottom are computed in its constructor
+  return new QuadTree(new Rectangle(width / 2, height / 2, width, height), 4);
+}
+
+function updatePersonasAndCount(quadtree) {
+  const counters = { enfermos: 0, sanos: 0, muertos: 0, recuperados: 0 };
+  for (let persona of simulationStore.personas) {
+    persona.update();
+    const key = COUNTER_KEY_BY_STATE[persona.estado];
+    if (key) counters[key]++;
+    // Uses the pre-stored Point object to avoid 'new Point' every frame
+    quadtree.insert(persona.quadTreePoint);
+  }
+  return counters;
+}
+
+function resolveCollisions(quadtree) {
+  for (let persona of simulationStore.personas) {
+    // New Circle per query avoids shared query-state issues
+    const queryCircle = new Circle(persona.pos.x, persona.pos.y, persona.radio * 4);
+    const points = quadtree.query(queryCircle);
+    for (let point of points) {
+      if (point.userData !== persona) {
+        persona.colisiona(point.userData);
+      }
+    }
+  }
+}
+
+function updateAdvancedStats(counters) {
+  simulationStore.r0 = calcularR0().toFixed(2);
+
+  if (counters.enfermos > simulationStore.picoEnfermos) {
+    simulationStore.picoEnfermos = counters.enfermos;
+    simulationStore.picoEnfermosPct = Math.round(
+      (simulationStore.picoEnfermos / simulationStore.poblacion) * 100
+    );
+  }
+}
+
+function checkSimulationEnd(counters) {
+  if (!simulationStore.terminado && counters.enfermos === 0 && simulationStore.personas.length > 0) {
+    simulationStore.terminado = true;
+  }
+}
+
 function calcularR0() {
-  if (!root || !root.personas || root.personas.length === 0) return 0;
-  const everInfected = root.personas.filter(p => p.estado !== ESTADOS.SANO);
+  if (!simulationStore || !simulationStore.personas || simulationStore.personas.length === 0) return 0;
+  const everInfected = simulationStore.personas.filter(p => p.estado !== ESTADOS.SANO);
   if (everInfected.length === 0) return 0;
   const sum = everInfected.reduce((acc, p) => acc + (p.infectadosDirectos || 0), 0);
   return sum / everInfected.length;
 }
 
-function checarColisionesyActualizaContadores() {
-  // Es indispensable instanciar Rectangle para que se calculen correctamente left, right, top, bottom en su constructor
-  const quadtree = new QuadTree(new Rectangle(width / 2, height / 2, width, height), 4);
-  activeQuadTree = quadtree;
-
-  const currentContadores = {
-    enfermos: 0,
-    sanos: 0,
-    muertos: 0,
-    recuperados: 0,
-  };
-
-  for (let persona of root.personas) {
-    persona.update();
-    currentContadores[persona.estado + "s"]++;
-    // Optimización: Usar el objeto Point persistente pre-guardado de la persona (evita 'new Point')
-    quadtree.insert(persona.quadTreePoint);
-  }
-
-  // Update store only once per frame
-  root.contadores = currentContadores;
-
-  // Actualizar estadísticas avanzadas
-  const r0Val = calcularR0();
-  root.r0 = r0Val.toFixed(2);
-
-  if (currentContadores.enfermos > root.picoEnfermos) {
-    root.picoEnfermos = currentContadores.enfermos;
-    root.picoEnfermosPct = Math.round((root.picoEnfermos / root.poblacion) * 100);
-  }
-
-  for (let persona of root.personas) {
-    // Instanciar Circle de forma limpia para evitar problemas con estados compartidos de consulta
-    const queryCircle = new Circle(persona.pos.x, persona.pos.y, persona.radio * 4);
-    const points = quadtree.query(queryCircle);
-
-    for (let point of points) {
-      let other = point.userData;
-      if (other !== persona) {
-        persona.colisiona(other);
-      }
-    }
-  }
-
-  if (currentContadores.enfermos === 0 && root.personas.length > 0) {
-    if (!root.terminado) {
-      root.terminado = true;
-    }
-  }
-
-  updateHistory();
+function reiniciarSimulacion() {
+  if (!simulationStore) return;
+  resetStoreState();
+  crearPersonas();
+  resetChart();
 }
 
-function Reinicia() {
-  if (!root) return;
-
-  root.personas = [];
-  root.picoEnfermos = 0;
-  root.picoEnfermosPct = 0;
-  root.r0 = "0.00";
-
-  for (let i = 0; i < root.poblacion; i++) {
-    root.personas.push(new Persona(random(width), random(height)));
-  }
-  
-  // Infect the first person
-  if (root.personas.length > 0) {
-    root.personas[0].setEstado(ESTADOS.ENFERMO);
-  }
-  
-  // Set quarantine
-  const numQuarantine = Math.floor((root.encuarentena * root.poblacion) / 100);
-  for (let i = 1; i <= numQuarantine && i < root.personas.length; i++) {
-    root.personas[i].movible = false;
-  }
-
-  root.terminado = false;
-  root.pausado = false;
-  root.shouldStep = false;
-  totalSimulationPopulation = root.poblacion;
-
+function resetStoreState() {
+  simulationStore.personas = [];
+  simulationStore.picoEnfermos = 0;
+  simulationStore.picoEnfermosPct = 0;
+  simulationStore.r0 = "0.00";
+  simulationStore.terminado = false;
+  simulationStore.pausado = false;
+  simulationStore.shouldStep = false;
+  totalSimulationPopulation = simulationStore.poblacion;
   history = { sanos: [], enfermos: [], recuperados: [], muertos: [] };
-  if (apexChart) {
-    apexChart.updateOptions({
-      yaxis: { show: false, min: 0, max: root.poblacion }
-    });
-    apexChart.updateSeries([
-      { name: 'Sanos', data: [] },
-      { name: 'Enfermos', data: [] },
-      { name: 'Recuperados', data: [] },
-      { name: 'Fallecidos', data: [] }
-    ]);
+}
+
+function crearPersonas() {
+  for (let i = 0; i < simulationStore.poblacion; i++) {
+    simulationStore.personas.push(new Persona(random(width), random(height)));
   }
+  if (simulationStore.personas.length > 0) {
+    simulationStore.personas[0].setEstado(ESTADOS.ENFERMO);
+  }
+  aplicarCuarentenaInicial();
+}
+
+function aplicarCuarentenaInicial() {
+  const numQuarantine = Math.floor((simulationStore.encuarentena * simulationStore.poblacion) / 100);
+  for (let i = 1; i <= numQuarantine && i < simulationStore.personas.length; i++) {
+    simulationStore.personas[i].movible = false;
+  }
+}
+
+function resetChart() {
+  if (!apexChart) return;
+  apexChart.updateOptions({
+    yaxis: { show: false, min: 0, max: simulationStore.poblacion }
+  });
+  apexChart.updateSeries([
+    { name: 'Sanos', data: [] },
+    { name: 'Enfermos', data: [] },
+    { name: 'Recuperados', data: [] },
+    { name: 'Fallecidos', data: [] }
+  ]);
 }
 
 function updateHistory() {
-  if (!root.terminado && frameCount % 30 === 0) { // Actualizar cada 30 frames para mayor fluidez
-    history.sanos.push(root.contadores.sanos);
-    history.enfermos.push(root.contadores.enfermos);
-    history.recuperados.push(root.contadores.recuperados);
-    history.muertos.push(root.contadores.muertos);
+  if (simulationStore.terminado || frameCount % HISTORY_SAMPLE_RATE !== 0) return;
 
-    if (apexChart) {
-      // Usar false para que no haya animaciones de redibujo que causen parpadeo
-      apexChart.updateSeries([
-        { name: 'Sanos', data: [...history.sanos] },
-        { name: 'Enfermos', data: [...history.enfermos] },
-        { name: 'Recuperados', data: [...history.recuperados] },
-        { name: 'Fallecidos', data: [...history.muertos] }
-      ], false); 
-    }
+  history.sanos.push(simulationStore.contadores.sanos);
+  history.enfermos.push(simulationStore.contadores.enfermos);
+  history.recuperados.push(simulationStore.contadores.recuperados);
+  history.muertos.push(simulationStore.contadores.muertos);
+
+  if (apexChart) {
+    // false = no redraw animations, prevents flickering
+    apexChart.updateSeries([
+      { name: 'Sanos', data: [...history.sanos] },
+      { name: 'Enfermos', data: [...history.enfermos] },
+      { name: 'Recuperados', data: [...history.recuperados] },
+      { name: 'Fallecidos', data: [...history.muertos] }
+    ], false);
   }
 }
 
@@ -222,10 +247,10 @@ function initChart() {
     chart: {
       type: 'area',
       height: 200,
-      animations: { 
-        enabled: true, 
-        easing: 'linear', 
-        dynamicAnimation: { enabled: true, speed: 400 } 
+      animations: {
+        enabled: true,
+        easing: 'linear',
+        dynamicAnimation: { enabled: true, speed: 400 }
       },
       toolbar: { show: false },
       sparkline: { enabled: true },
@@ -260,49 +285,49 @@ function initChart() {
 
 function mouseClickInsideCanvas() {
   if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return false;
-  
+
   const elem = document.elementFromPoint(mouseX, mouseY);
   if (!elem) return false;
-  
+
   const isCanvas = elem.tagName.toLowerCase() === 'canvas';
   const isInsideDataviz = elem.closest('#dataviz') !== null;
-  const isInsideUI = elem.closest('.sidebar') !== null || 
-                     elem.closest('.stats-sidebar') !== null || 
-                     elem.closest('.top-action-bar') !== null || 
-                     elem.closest('.chart-drawer') !== null || 
-                     elem.closest('.info-overlay') !== null || 
+  const isInsideUI = elem.closest('.sidebar') !== null ||
+                     elem.closest('.stats-sidebar') !== null ||
+                     elem.closest('.top-action-bar') !== null ||
+                     elem.closest('.chart-drawer') !== null ||
+                     elem.closest('.info-overlay') !== null ||
                      elem.closest('.sidebar-toggle') !== null;
-                     
+
   return (isCanvas || isInsideDataviz) && !isInsideUI;
 }
 
 function mousePressed() {
-  if (!root) return;
+  if (!simulationStore) return;
   if (!mouseClickInsideCanvas()) return;
-  
-  if (root.herramienta === 'muro') {
+
+  if (simulationStore.herramienta === 'muro') {
     wallStart = { x: mouseX, y: mouseY };
-  } else if (root.herramienta === 'vacuna' || root.herramienta === 'infecta') {
+  } else if (simulationStore.herramienta === 'vacuna' || simulationStore.herramienta === 'infecta') {
     aplicaPincelInteractiva();
   }
 }
 
 function mouseDragged() {
-  if (!root) return;
+  if (!simulationStore) return;
   if (!mouseClickInsideCanvas()) return;
-  
-  if (root.herramienta === 'vacuna' || root.herramienta === 'infecta') {
+
+  if (simulationStore.herramienta === 'vacuna' || simulationStore.herramienta === 'infecta') {
     aplicaPincelInteractiva();
   }
 }
 
 function mouseReleased() {
-  if (!root) return;
-  
-  if (root.herramienta === 'muro' && wallStart && mouseClickInsideCanvas()) {
-    const d = dist(wallStart.x, wallStart.y, mouseX, mouseY);
-    if (d > 10) {
-      root.barreras.push({
+  if (!simulationStore) return;
+
+  if (simulationStore.herramienta === 'muro' && wallStart && mouseClickInsideCanvas()) {
+    const wallLength = dist(wallStart.x, wallStart.y, mouseX, mouseY);
+    if (wallLength > MIN_WALL_LENGTH) {
+      simulationStore.barreras.push({
         x1: wallStart.x,
         y1: wallStart.y,
         x2: mouseX,
@@ -314,59 +339,56 @@ function mouseReleased() {
 }
 
 function aplicaPincelInteractiva() {
-  if (!root || !root.personas || root.personas.length === 0) return;
-  
-  const brushRadius = 25;
-  const queryCircle = new Circle(mouseX, mouseY, brushRadius);
-  
+  if (!simulationStore || !simulationStore.personas || simulationStore.personas.length === 0) return;
+
+  const queryCircle = new Circle(mouseX, mouseY, BRUSH_RADIUS);
+
   let qtree = activeQuadTree;
   if (!qtree) {
     qtree = new QuadTree(new Rectangle(width / 2, height / 2, width, height), 4);
-    for (let persona of root.personas) {
+    for (let persona of simulationStore.personas) {
       qtree.insert(persona.quadTreePoint);
     }
   }
-  
+
   const points = qtree.query(queryCircle);
-  const isVacuna = root.herramienta === 'vacuna';
-  
+  const isVacuna = simulationStore.herramienta === 'vacuna';
+
   for (let point of points) {
-    let persona = point.userData;
-    const dSq = (persona.pos.x - mouseX)**2 + (persona.pos.y - mouseY)**2;
-    if (dSq <= brushRadius * brushRadius) {
-      if (isVacuna) {
-        if (persona.estado === ESTADOS.SANO || persona.estado === ESTADOS.ENFERMO) {
-          persona.setEstado(ESTADOS.RECUPERADO);
-          persona.tiempoenfermo = 0;
-        }
-      } else { // infecta
-        if (persona.estado === ESTADOS.SANO) {
-          persona.setEstado(ESTADOS.ENFERMO);
-          persona.tiempoenfermo = 0;
-        }
+    const persona = point.userData;
+    const dSq = (persona.pos.x - mouseX) ** 2 + (persona.pos.y - mouseY) ** 2;
+    if (dSq > BRUSH_RADIUS * BRUSH_RADIUS) continue;
+
+    if (isVacuna) {
+      if (persona.estado === ESTADOS.SANO || persona.estado === ESTADOS.ENFERMO) {
+        persona.setEstado(ESTADOS.RECUPERADO);
+        persona.tiempoEnfermo = 0;
+      }
+    } else {
+      if (persona.estado === ESTADOS.SANO) {
+        persona.setEstado(ESTADOS.ENFERMO);
+        persona.tiempoEnfermo = 0;
       }
     }
   }
 }
 
 function dibujaBarreras() {
-  if (!root || !root.barreras) return;
-  for (let b of root.barreras) {
+  if (!simulationStore || !simulationStore.barreras) return;
+  for (let barrier of simulationStore.barreras) {
     push();
-    // Brillo exterior elegante de color violeta/índigo neón
     stroke(99, 102, 241, 100);
     strokeWeight(8);
-    line(b.x1, b.y1, b.x2, b.y2);
-    // Núcleo central blanco brillante
+    line(barrier.x1, barrier.y1, barrier.x2, barrier.y2);
     stroke(255, 255, 255, 220);
     strokeWeight(2);
-    line(b.x1, b.y1, b.x2, b.y2);
+    line(barrier.x1, barrier.y1, barrier.x2, barrier.y2);
     pop();
   }
 }
 
 function dibujaPrevisualizacionMuro() {
-  if (root.herramienta === 'muro' && wallStart && mouseIsPressed && mouseClickInsideCanvas()) {
+  if (simulationStore.herramienta === 'muro' && wallStart && mouseIsPressed && mouseClickInsideCanvas()) {
     push();
     stroke(99, 102, 241, 180);
     strokeWeight(2);
@@ -382,16 +404,16 @@ function dibujaPrevisualizacionMuro() {
 }
 
 function dibujaCursorPincel() {
-  if ((root.herramienta === 'vacuna' || root.herramienta === 'infecta') && mouseClickInsideCanvas()) {
+  if ((simulationStore.herramienta === 'vacuna' || simulationStore.herramienta === 'infecta') && mouseClickInsideCanvas()) {
     push();
     noFill();
-    const isVacuna = root.herramienta === 'vacuna';
+    const isVacuna = simulationStore.herramienta === 'vacuna';
     stroke(isVacuna ? '#10b981' : '#f43f5e');
     strokeWeight(1.5);
     if (drawingContext && drawingContext.setLineDash) {
       drawingContext.setLineDash([4, 2]);
     }
-    ellipse(mouseX, mouseY, 50, 50);
+    ellipse(mouseX, mouseY, BRUSH_RADIUS * 2, BRUSH_RADIUS * 2);
     if (drawingContext && drawingContext.setLineDash) {
       drawingContext.setLineDash([]);
     }
@@ -403,9 +425,10 @@ function dibujaCursorPincel() {
 }
 
 function clearBarreras() {
-  if (root) {
-    root.barreras = [];
+  if (simulationStore) {
+    simulationStore.barreras = [];
   }
 }
 
 window.clearBarreras = clearBarreras;
+window.reiniciarSimulacion = reiniciarSimulacion;

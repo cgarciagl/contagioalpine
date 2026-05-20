@@ -52,7 +52,7 @@
               <span>Sujetos</span>
               <span class="highlight-val" x-text="$store.simula.poblacion"></span>
             </div>
-            <input type="range" min="50" max="700" step="10" x-model.number="$store.simula.poblacion" @input="Reinicia()" />
+            <input type="range" min="50" max="700" step="10" x-model.number="$store.simula.poblacion" @input="reiniciarSimulacion()" />
           </div>
 
           <div class="control-group-sidebar">
@@ -60,7 +60,7 @@
               <span>En Cuarentena</span>
               <span class="highlight-val" x-text="$store.simula.encuarentena + '%'"></span>
             </div>
-            <input type="range" min="0" max="95" step="5" x-model.number="$store.simula.encuarentena" @input="Reinicia()" />
+            <input type="range" min="0" max="95" step="5" x-model.number="$store.simula.encuarentena" @input="reiniciarSimulacion()" />
           </div>
         </div>
 
@@ -144,7 +144,7 @@
       </div>
 
       <div class="sidebar-footer">
-        <button class="btn-reset glow-button" @click="Reinicia()">
+        <button class="btn-reset glow-button" @click="reiniciarSimulacion()">
           <span>🔄</span> Reiniciar Simulación
         </button>
       </div>
