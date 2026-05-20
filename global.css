@@ -870,3 +870,119 @@ input:checked + .slider-switch:before {
     z-index: 70;
   }
 }
+
+/* --- HERRAMIENTAS INTERACTIVAS (GOD MODE) --- */
+.tool-selector {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--panel-border);
+}
+
+.tool-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.65rem 0.5rem;
+  border-radius: 0.5rem;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.825rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tool-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.tool-btn:active {
+  transform: translateY(1px);
+}
+
+/* Estilos de botones activos específicos con efectos neón hermosos */
+.tool-btn.active {
+  color: white;
+  transform: scale(1.02);
+}
+
+/* Normal / Navigate tool: Slate/Indigo default */
+.tool-btn:nth-child(1).active {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+}
+
+/* Vaccine tool: Emerald */
+.tool-btn:nth-child(2).active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+  color: #a7f3d0;
+}
+
+/* Infection tool: Rose */
+.tool-btn:nth-child(3).active {
+  background: rgba(244, 63, 94, 0.2);
+  border-color: #f43f5e;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
+  color: #fecdd3;
+}
+
+/* Wall tool: Violet */
+.tool-btn:nth-child(4).active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.4);
+  color: #ddd6fe;
+}
+
+.tool-icon {
+  font-size: 1.125rem;
+}
+
+.tool-name {
+  font-size: 0.725rem;
+  letter-spacing: 0.02em;
+}
+
+/* Clear barriers button styling */
+.btn-clear-walls {
+  width: 100%;
+  padding: 0.65rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.05);
+  color: #ef4444;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-walls:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+  transform: translateY(-1px);
+}
+
+.btn-clear-walls:active {
+  transform: translateY(1px);
+}

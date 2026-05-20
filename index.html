@@ -114,6 +114,33 @@
             </label>
           </div>
         </div>
+
+        <div class="controls-section">
+          <h3>Herramientas Especiales (God Mode)</h3>
+          
+          <div class="tool-selector">
+            <button class="tool-btn" :class="{ 'active': $store.simula.herramienta === 'ninguna' }" @click="$store.simula.herramienta = 'ninguna'" title="Navegar normal">
+              <span class="tool-icon">🖱️</span>
+              <span class="tool-name">Normal</span>
+            </button>
+            <button class="tool-btn" :class="{ 'active': $store.simula.herramienta === 'vacuna' }" @click="$store.simula.herramienta = 'vacuna'" title="Pincel de Vacunación (Vacuna agentes al tocarlos)">
+              <span class="tool-icon">💉</span>
+              <span class="tool-name">Vacunar</span>
+            </button>
+            <button class="tool-btn" :class="{ 'active': $store.simula.herramienta === 'infecta' }" @click="$store.simula.herramienta = 'infecta'" title="Pincel de Infección (Infecta agentes al tocarlos)">
+              <span class="tool-icon">🦠</span>
+              <span class="tool-name">Infectar</span>
+            </button>
+            <button class="tool-btn" :class="{ 'active': $store.simula.herramienta === 'muro' }" @click="$store.simula.herramienta = 'muro'" title="Dibujar barreras en el mapa">
+              <span class="tool-icon">🧱</span>
+              <span class="tool-name">Muro</span>
+            </button>
+          </div>
+
+          <button class="btn-clear-walls" @click="clearBarreras()" x-show="$store.simula.barreras.length > 0" x-transition x-cloak>
+            <span>🗑️</span> Borrar Barreras (<span x-text="$store.simula.barreras.length"></span>)
+          </button>
+        </div>
       </div>
 
       <div class="sidebar-footer">
@@ -263,8 +290,11 @@
       <button class="info-toggle" @click="showInfo = !showInfo" aria-label="Información">ℹ</button>
       
       <div class="info-content" x-show="showInfo" @click.away="showInfo = false" x-transition x-cloak>
-        <h2>EpidemicSim v2.0</h2>
-        <p>Modelado matemático del contagio por contacto directo usando agentes cinéticos y aceleración de QuadTree.</p>
+        <h2>EpidemicSim v2.0 🦠</h2>
+        <p style="margin-bottom: 0.75rem;">Modelado matemático del contagio por contacto directo usando agentes cinéticos y aceleración de QuadTree.</p>
+        <p style="font-size: 0.725rem; border-left: 2px solid var(--accent-primary); padding-left: 0.65rem; margin-bottom: 1rem; color: var(--text-secondary); line-height: 1.45;">
+          En cada simulación puedes parametrizar en tiempo real: la población de individuos, el porcentaje de estos en aislamiento (cuarentena), la probabilidad de contagio por contacto, la tasa de mortalidad y la duración de la infección antes de recuperarse o fallecer.
+        </p>
         
         <h3>Leyenda de Sujetos</h3>
         <div class="legend-item">
@@ -288,6 +318,12 @@
           <div class="dashed-circle-preview"></div>
           <span>Aislamiento (Quarantine Field)</span>
         </div>
+
+        <h3 style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(255, 255, 255, 0.08)">Controles Interactivos</h3>
+        <p style="font-size: 0.65rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 0.5rem;">
+          <strong>💉 Vacunar / 🦠 Infectar:</strong> Selecciona el pincel y arrastra el ratón sobre los agentes para cambiar su estado en caliente.<br/>
+          <strong>🧱 Muro:</strong> Selecciona Muro, haz clic y arrastra sobre el lienzo para dibujar "campos de fuerza" donde los agentes rebotan físicamente.
+        </p>
 
         <p class="legend-note">
           * En <strong>Modo Zombie</strong>, los agentes fallecidos no quedan inmóviles; vagan indefinidamente y transmiten la infección en contacto.

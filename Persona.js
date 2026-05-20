@@ -103,6 +103,7 @@ class Persona {
       this.pos.y += this.vel.y * velFactor;
 
       this.rebotarConParedes();
+      this.rebotarConBarreras();
     }
 
     // Mantener la posición del punto Quadtree sincronizada para la detección de colisiones
@@ -145,6 +146,56 @@ class Persona {
     if (this.pos.y < this.radio || this.pos.y > height - this.radio) {
       this.vel.y *= -1;
       this.pos.y = constrain(this.pos.y, this.radio, height - this.radio);
+    }
+  }
+
+  rebotarConBarreras() {
+    if (!root || !root.barreras || root.barreras.length === 0) return;
+
+    for (let b of root.barreras) {
+      const abx = b.x2 - b.x1;
+      const aby = b.y2 - b.y1;
+      
+      const apx = this.pos.x - b.x1;
+      const apy = this.pos.y - b.y1;
+
+      const ab2 = abx * abx + aby * aby;
+      if (ab2 === 0) continue;
+
+      let t = (apx * abx + apy * aby) / ab2;
+      t = constrain(t, 0, 1);
+
+      const closestX = b.x1 + t * abx;
+      const closestY = b.y1 + t * aby;
+
+      const dx = this.pos.x - closestX;
+      const dy = this.pos.y - closestY;
+      const distSq = dx * dx + dy * dy;
+
+      const r = this.radio;
+      if (distSq < r * r) {
+        const d = Math.sqrt(distSq);
+        
+        if (d > 0) {
+          const overlap = r - d;
+          this.pos.x += (dx / d) * overlap;
+          this.pos.y += (dy / d) * overlap;
+
+          const nx = dx / d;
+          const ny = dy / d;
+
+          const dot = this.vel.x * nx + this.vel.y * ny;
+          if (dot < 0) {
+            this.vel.x = this.vel.x - 2 * dot * nx;
+            this.vel.y = this.vel.y - 2 * dot * ny;
+          }
+        } else {
+          this.pos.x += random(-1, 1) * r;
+          this.pos.y += random(-1, 1) * r;
+          this.vel.x *= -1;
+          this.vel.y *= -1;
+        }
+      }
     }
   }
 

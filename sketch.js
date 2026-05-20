@@ -4,6 +4,9 @@ let history = { sanos: [], enfermos: [], recuperados: [], muertos: [] };
 let graphBuffer;
 let apexChart;
 
+let activeQuadTree;
+let wallStart = null;
+
 const DEFAULT_POBLACION = 300;
 const DEFAULT_ENCUARENTENA = 20;
 const DEFAULT_TIEMPO_ENFERMEDAD = 150;
@@ -28,6 +31,8 @@ document.addEventListener("alpine:init", () => {
     picoEnfermosPct: 0,
     contadores: { sanos: 0, enfermos: 0, recuperados: 0, muertos: 0 },
     personas: [],
+    herramienta: 'ninguna',
+    barreras: [],
   });
 
   root = Alpine.store(STORE_NAME);
@@ -52,6 +57,19 @@ function draw() {
   background("#0b0f19"); 
   
   if (root) {
+    // Manejo de cursores contextuales según la herramienta activa
+    if (mouseClickInsideCanvas()) {
+      if (root.herramienta === 'ninguna') {
+        cursor(ARROW);
+      } else if (root.herramienta === 'muro') {
+        cursor(CROSS);
+      } else if (root.herramienta === 'vacuna' || root.herramienta === 'infecta') {
+        noCursor();
+      }
+    } else {
+      cursor(ARROW);
+    }
+
     if (!root.pausado && !root.terminado) {
       checarColisionesyActualizaContadores();
     } else if (root.shouldStep) {
@@ -63,6 +81,11 @@ function draw() {
         persona.dibuja();
       }
     }
+
+    // Dibujar barreras y previsualizaciones
+    dibujaBarreras();
+    dibujaPrevisualizacionMuro();
+    dibujaCursorPincel();
   }
 }
 
@@ -77,6 +100,7 @@ function calcularR0() {
 function checarColisionesyActualizaContadores() {
   // Es indispensable instanciar Rectangle para que se calculen correctamente left, right, top, bottom en su constructor
   const quadtree = new QuadTree(new Rectangle(width / 2, height / 2, width, height), 4);
+  activeQuadTree = quadtree;
 
   const currentContadores = {
     enfermos: 0,
@@ -231,3 +255,157 @@ function initChart() {
   apexChart = new ApexCharts(document.querySelector("#chart-container"), options);
   apexChart.render();
 }
+
+// --- HERRAMIENTAS INTERACTIVAS Y PINCELES ---
+
+function mouseClickInsideCanvas() {
+  if (mouseX < 0 || mouseX > width || mouseY < 0 || mouseY > height) return false;
+  
+  const elem = document.elementFromPoint(mouseX, mouseY);
+  if (!elem) return false;
+  
+  const isCanvas = elem.tagName.toLowerCase() === 'canvas';
+  const isInsideDataviz = elem.closest('#dataviz') !== null;
+  const isInsideUI = elem.closest('.sidebar') !== null || 
+                     elem.closest('.stats-sidebar') !== null || 
+                     elem.closest('.top-action-bar') !== null || 
+                     elem.closest('.chart-drawer') !== null || 
+                     elem.closest('.info-overlay') !== null || 
+                     elem.closest('.sidebar-toggle') !== null;
+                     
+  return (isCanvas || isInsideDataviz) && !isInsideUI;
+}
+
+function mousePressed() {
+  if (!root) return;
+  if (!mouseClickInsideCanvas()) return;
+  
+  if (root.herramienta === 'muro') {
+    wallStart = { x: mouseX, y: mouseY };
+  } else if (root.herramienta === 'vacuna' || root.herramienta === 'infecta') {
+    aplicaPincelInteractiva();
+  }
+}
+
+function mouseDragged() {
+  if (!root) return;
+  if (!mouseClickInsideCanvas()) return;
+  
+  if (root.herramienta === 'vacuna' || root.herramienta === 'infecta') {
+    aplicaPincelInteractiva();
+  }
+}
+
+function mouseReleased() {
+  if (!root) return;
+  
+  if (root.herramienta === 'muro' && wallStart && mouseClickInsideCanvas()) {
+    const d = dist(wallStart.x, wallStart.y, mouseX, mouseY);
+    if (d > 10) {
+      root.barreras.push({
+        x1: wallStart.x,
+        y1: wallStart.y,
+        x2: mouseX,
+        y2: mouseY
+      });
+    }
+  }
+  wallStart = null;
+}
+
+function aplicaPincelInteractiva() {
+  if (!root || !root.personas || root.personas.length === 0) return;
+  
+  const brushRadius = 25;
+  const queryCircle = new Circle(mouseX, mouseY, brushRadius);
+  
+  let qtree = activeQuadTree;
+  if (!qtree) {
+    qtree = new QuadTree(new Rectangle(width / 2, height / 2, width, height), 4);
+    for (let persona of root.personas) {
+      qtree.insert(persona.quadTreePoint);
+    }
+  }
+  
+  const points = qtree.query(queryCircle);
+  const isVacuna = root.herramienta === 'vacuna';
+  
+  for (let point of points) {
+    let persona = point.userData;
+    const dSq = (persona.pos.x - mouseX)**2 + (persona.pos.y - mouseY)**2;
+    if (dSq <= brushRadius * brushRadius) {
+      if (isVacuna) {
+        if (persona.estado === ESTADOS.SANO || persona.estado === ESTADOS.ENFERMO) {
+          persona.setEstado(ESTADOS.RECUPERADO);
+          persona.tiempoenfermo = 0;
+        }
+      } else { // infecta
+        if (persona.estado === ESTADOS.SANO) {
+          persona.setEstado(ESTADOS.ENFERMO);
+          persona.tiempoenfermo = 0;
+        }
+      }
+    }
+  }
+}
+
+function dibujaBarreras() {
+  if (!root || !root.barreras) return;
+  for (let b of root.barreras) {
+    push();
+    // Brillo exterior elegante de color violeta/índigo neón
+    stroke(99, 102, 241, 100);
+    strokeWeight(8);
+    line(b.x1, b.y1, b.x2, b.y2);
+    // Núcleo central blanco brillante
+    stroke(255, 255, 255, 220);
+    strokeWeight(2);
+    line(b.x1, b.y1, b.x2, b.y2);
+    pop();
+  }
+}
+
+function dibujaPrevisualizacionMuro() {
+  if (root.herramienta === 'muro' && wallStart && mouseIsPressed && mouseClickInsideCanvas()) {
+    push();
+    stroke(99, 102, 241, 180);
+    strokeWeight(2);
+    if (drawingContext && drawingContext.setLineDash) {
+      drawingContext.setLineDash([6, 4]);
+    }
+    line(wallStart.x, wallStart.y, mouseX, mouseY);
+    if (drawingContext && drawingContext.setLineDash) {
+      drawingContext.setLineDash([]);
+    }
+    pop();
+  }
+}
+
+function dibujaCursorPincel() {
+  if ((root.herramienta === 'vacuna' || root.herramienta === 'infecta') && mouseClickInsideCanvas()) {
+    push();
+    noFill();
+    const isVacuna = root.herramienta === 'vacuna';
+    stroke(isVacuna ? '#10b981' : '#f43f5e');
+    strokeWeight(1.5);
+    if (drawingContext && drawingContext.setLineDash) {
+      drawingContext.setLineDash([4, 2]);
+    }
+    ellipse(mouseX, mouseY, 50, 50);
+    if (drawingContext && drawingContext.setLineDash) {
+      drawingContext.setLineDash([]);
+    }
+    fill(isVacuna ? '#10b981' : '#f43f5e');
+    noStroke();
+    ellipse(mouseX, mouseY, 4, 4);
+    pop();
+  }
+}
+
+function clearBarreras() {
+  if (root) {
+    root.barreras = [];
+  }
+}
+
+window.clearBarreras = clearBarreras;
