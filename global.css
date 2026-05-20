@@ -1,6 +1,6 @@
 :root {
   --bg-color: #0f172a;
-  --panel-bg: rgba(15, 23, 42, 0.85);
+  --panel-bg: rgba(15, 23, 42, 0.2);
   --accent-sano: #3b82f6;      /* Azul: Susceptible */
   --accent-enfermo: #f43f5e;   /* Rosa/Rojo: Infectado */
   --accent-recuperado: #10b981; /* Esmeralda: Inmune */

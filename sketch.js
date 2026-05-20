@@ -49,6 +49,7 @@ function draw() {
 }
 
 function checarColisionesyActualizaContadores() {
+  // Es indispensable instanciar Rectangle para que se calculen correctamente left, right, top, bottom en su constructor
   const quadtree = new QuadTree(new Rectangle(width / 2, height / 2, width, height), 4);
 
   const currentContadores = {
@@ -61,18 +62,17 @@ function checarColisionesyActualizaContadores() {
   for (let persona of root.personas) {
     persona.update();
     currentContadores[persona.estado + "s"]++;
-    quadtree.insert(new Point(persona.pos.x, persona.pos.y, persona));
+    // Optimización: Usar el objeto Point persistente pre-guardado de la persona (evita 'new Point')
+    quadtree.insert(persona.quadTreePoint);
   }
 
   // Update store only once per frame
   root.contadores = currentContadores;
 
   for (let persona of root.personas) {
-    // Optimization: sick or dead (in zombie mode) can infect others
-    const canInfect = (persona.estado === ESTADOS.ENFERMO || (root.modozombie && persona.estado === ESTADOS.MUERTO));
-    
-    let queryCircle = new Circle(persona.pos.x, persona.pos.y, persona.radio * 4);
-    let points = quadtree.query(queryCircle);
+    // Instanciar Circle de forma limpia para evitar problemas con estados compartidos de consulta
+    const queryCircle = new Circle(persona.pos.x, persona.pos.y, persona.radio * 4);
+    const points = quadtree.query(queryCircle);
 
     for (let point of points) {
       let other = point.userData;

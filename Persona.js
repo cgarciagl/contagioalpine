@@ -12,6 +12,13 @@ const colorEstado = {
   [ESTADOS.MUERTO]: "#64748b",    // Gris
 };
 
+const colorEstadoRGB = {
+  [ESTADOS.SANO]: [59, 130, 246],      // #3b82f6
+  [ESTADOS.ENFERMO]: [244, 63, 94],    // #f43f5e
+  [ESTADOS.RECUPERADO]: [16, 185, 129], // #10b981
+  [ESTADOS.MUERTO]: [100, 116, 139],    // #64748b
+};
+
 class Persona {
   constructor(x, y) {
     this.pos = createVector(x, y);
@@ -20,8 +27,9 @@ class Persona {
     this.estado = ESTADOS.SANO;
     this.tiempoenfermo = 0;
     this.movible = true;
-    this.pulseRadius = 0; // Para el efecto visual de contagio
-    this.history = []; // Para estelas individuales sugeridas
+
+    // Optimización: punto de Quadtree pre-guardado para evitar 'new Point' en cada frame
+    this.quadTreePoint = new Point(x, y, this);
   }
 
   setEstado(nuevoEstado) {
@@ -43,33 +51,9 @@ class Persona {
     push();
     noStroke();
     
-    // Efecto de estela pequeña (mini-trail)
-    if (this.movible && this.estado !== ESTADOS.MUERTO) {
-      for (let i = 0; i < this.history.length; i++) {
-        let pos = this.history[i];
-        let alpha = map(i, 0, this.history.length, 10, 50);
-        fill(colorEstado[this.estado] + Math.floor(alpha).toString(16).padStart(2, '0'));
-        ellipse(pos.x, pos.y, this.radio * 1.5, this.radio * 1.5);
-      }
-    }
+    const rgb = colorEstadoRGB[this.estado];
 
-    // Efecto de pulso en el momento del contagio
-    if (this.pulseRadius > 0) {
-      noFill();
-      stroke(colorEstado[ESTADOS.ENFERMO] + "88");
-      strokeWeight(2);
-      ellipse(this.pos.x, this.pos.y, this.pulseRadius, this.pulseRadius);
-      this.pulseRadius += 2;
-      if (this.pulseRadius > 40) this.pulseRadius = 0;
-    }
-    
-    // Resplandor para enfermos o zombies
-    if (this.estado === ESTADOS.ENFERMO || (this.estado === ESTADOS.MUERTO && root.modozombie)) {
-      fill(colorEstado[this.estado] + "33"); 
-      ellipse(this.pos.x, this.pos.y, this.radio * 5, this.radio * 5);
-    }
-
-    fill(colorEstado[this.estado]);
+    fill(rgb[0], rgb[1], rgb[2]);
     stroke(255, 80);
     strokeWeight(1);
     ellipse(this.pos.x, this.pos.y, this.radio * 2, this.radio * 2);
@@ -78,14 +62,17 @@ class Persona {
 
   update() {
     if (this.movible) {
-      // Guardar historial para estelas
-      this.history.push(this.pos.copy());
-      if (this.history.length > 5) this.history.shift();
+      // Aritmética directa de componentes (evita instanciar un nuevo vector con p5.Vector.mult)
+      const velFactor = root.velocidad || 1;
+      this.pos.x += this.vel.x * velFactor;
+      this.pos.y += this.vel.y * velFactor;
 
-      let currentVel = p5.Vector.mult(this.vel, root.velocidad || 1);
-      this.pos.add(currentVel);
       this.rebotarConParedes();
     }
+
+    // Mantener la posición del punto Quadtree sincronizada para la detección de colisiones
+    this.quadTreePoint.x = this.pos.x;
+    this.quadTreePoint.y = this.pos.y;
 
     if (this.estado === ESTADOS.ENFERMO) {
       this.tiempoenfermo++;
@@ -122,15 +109,27 @@ class Persona {
   }
 
   colisiona(p) {
-    const d = dist(this.pos.x, this.pos.y, p.pos.x, p.pos.y);
+    // Optimización: Primero verificar con la distancia al cuadrado (evita Math.sqrt/dist en la mayoría de casos)
+    const dx = this.pos.x - p.pos.x;
+    const dy = this.pos.y - p.pos.y;
+    const dSq = dx * dx + dy * dy;
     const minD = this.radio + p.radio;
+    const minDSq = minD * minD;
     
-    if (d < minD) {
+    if (dSq < minDSq) {
+      const d = Math.sqrt(dSq);
       // Prevent overlapping
       const overlap = minD - d;
-      const move = p5.Vector.sub(this.pos, p.pos).setMag(overlap / 2);
-      this.pos.add(move);
-      p.pos.sub(move);
+      
+      // Optimización: Aritmética directa de componentes (evita instanciar p5.Vector y .setMag)
+      if (d > 0) {
+        const moveX = (dx / d) * (overlap / 2);
+        const moveY = (dy / d) * (overlap / 2);
+        this.pos.x += moveX;
+        this.pos.y += moveY;
+        p.pos.x -= moveX;
+        p.pos.y -= moveY;
+      }
 
       // Infection logic
       if (this.estado === ESTADOS.ENFERMO || p.estado === ESTADOS.ENFERMO) {
@@ -152,7 +151,6 @@ class Persona {
   intentarContagio() {
     if (this.estado === ESTADOS.SANO) {
       this.setEstado(ESTADOS.ENFERMO);
-      this.pulseRadius = 1; // Iniciar efecto visual de pulso
     }
   }
 }
