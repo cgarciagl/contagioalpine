@@ -1,6 +1,6 @@
 :root {
   --bg-color: #0b0f19;
-  --panel-bg: rgba(11, 15, 25, 0.65);
+  --panel-bg: rgba(11, 15, 25, 0.70);
   --panel-border: rgba(255, 255, 255, 0.08);
   --panel-glow: rgba(99, 102, 241, 0.15);
   
@@ -14,7 +14,7 @@
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   
-  --shadow-premium: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  --shadow-premium: none;
 }
 
 [x-cloak] {
@@ -44,7 +44,7 @@ body {
   height: 6px;
 }
 .custom-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(11, 15, 25, 0.70);
 }
 .custom-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
@@ -76,8 +76,6 @@ canvas {
   bottom: 1.5rem;
   width: 320px;
   background: var(--panel-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--panel-border);
   border-radius: 1.5rem;
   z-index: 100;
@@ -259,7 +257,7 @@ input:checked + .slider-switch:before {
 .sidebar-footer {
   padding: 1.25rem 1.5rem;
   border-top: 1px solid var(--panel-border);
-  background: rgba(11, 15, 25, 0.4);
+  background: rgba(11, 15, 25, 0.70);
 }
 
 .btn-reset {
@@ -297,8 +295,6 @@ input:checked + .slider-switch:before {
   left: 1.5rem;
   padding: 0.75rem 1.25rem;
   background: var(--panel-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--panel-border);
   border-radius: 0.75rem;
   color: white;
@@ -306,7 +302,6 @@ input:checked + .slider-switch:before {
   cursor: pointer;
   z-index: 110;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -326,8 +321,6 @@ input:checked + .slider-switch:before {
   transform: translateX(-50%);
   z-index: 90;
   background: var(--panel-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--panel-border);
   padding: 0.5rem 1.25rem;
   border-radius: 9999px;
@@ -377,7 +370,7 @@ input:checked + .slider-switch:before {
 }
 
 .action-btn {
-  background: transparent;
+  background: rgba(11, 15, 25, 0.70);
   border: none;
   width: 32px;
   height: 32px;
@@ -416,7 +409,7 @@ input:checked + .slider-switch:before {
 }
 
 .speed-btn {
-  background: transparent;
+  background: rgba(11, 15, 25, 0.70);
   border: none;
   padding: 0.25rem 0.5rem;
   border-radius: 0.375rem;
@@ -445,8 +438,6 @@ input:checked + .slider-switch:before {
   right: 1.5rem;
   width: 280px;
   background: var(--panel-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--panel-border);
   border-radius: 1.5rem;
   z-index: 95;
@@ -653,10 +644,7 @@ input:checked + .slider-switch:before {
   height: 240px;
   z-index: 85;
   background: var(--panel-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   border-top: 1px solid var(--panel-border);
-  box-shadow: 0 -10px 25px rgba(0, 0, 0, 0.4);
   transform: translateY(195px); /* Peek only the handle by default */
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -668,7 +656,7 @@ input:checked + .slider-switch:before {
 .drawer-handle {
   width: 100%;
   height: 45px;
-  background: rgba(11, 15, 25, 0.4);
+  background: rgba(11, 15, 25, 0.70);
   border: none;
   border-bottom: 1px solid var(--panel-border);
   color: var(--text-secondary);
@@ -720,14 +708,11 @@ input:checked + .slider-switch:before {
   align-items: center;
   justify-content: center;
   background: var(--panel-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--panel-border);
   cursor: pointer;
   color: var(--text-primary);
   font-size: 1.125rem;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .info-toggle:hover {
@@ -741,8 +726,6 @@ input:checked + .slider-switch:before {
   right: 0;
   width: 320px;
   background: var(--panel-bg);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
   border: 1px solid var(--panel-border);
   padding: 1.5rem;
   border-radius: 1.25rem;
@@ -792,7 +775,7 @@ input:checked + .slider-switch:before {
   height: 14px;
   border-radius: 50%;
   border: 1.5px dashed rgba(255, 255, 255, 0.7);
-  background: transparent;
+  background: rgba(11, 15, 25, 0.70);
 }
 
 .legend-note {

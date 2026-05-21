@@ -12,6 +12,7 @@ const DEFAULT_TIEMPO_ENFERMEDAD = 150;
 const DEFAULT_MORTALIDAD = 50;
 const DEFAULT_MODO_ZOMBIE = false;
 const STORE_NAME = "simula";
+const CONFIG_KEY = "contagioalpine_config";
 
 const HISTORY_SAMPLE_RATE = 30;
 const MIN_WALL_LENGTH = 10;
@@ -24,18 +25,55 @@ const COUNTER_KEY_BY_STATE = Object.freeze({
   [ESTADOS.MUERTO]:     "muertos",
 });
 
+const CONFIG_DEFAULTS = {
+  poblacion: DEFAULT_POBLACION,
+  encuarentena: DEFAULT_ENCUARENTENA,
+  tiempoenfermedad: DEFAULT_TIEMPO_ENFERMEDAD,
+  modozombie: DEFAULT_MODO_ZOMBIE,
+  mortalidad: DEFAULT_MORTALIDAD,
+  tasacontagio: 90,
+  velocidad: 1.5,
+};
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return { ...CONFIG_DEFAULTS };
+    const saved = JSON.parse(raw);
+    return { ...CONFIG_DEFAULTS, ...saved };
+  } catch {
+    return { ...CONFIG_DEFAULTS };
+  }
+}
+
+function saveConfig() {
+  if (!simulationStore) return;
+  const cfg = {
+    poblacion: simulationStore.poblacion,
+    encuarentena: simulationStore.encuarentena,
+    tiempoenfermedad: simulationStore.tiempoenfermedad,
+    modozombie: simulationStore.modozombie,
+    mortalidad: simulationStore.mortalidad,
+    tasacontagio: simulationStore.tasacontagio,
+    velocidad: simulationStore.velocidad,
+  };
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+
 document.addEventListener("alpine:init", () => {
+  const cfg = loadConfig();
+
   Alpine.store(STORE_NAME, {
-    poblacion: DEFAULT_POBLACION,
-    encuarentena: DEFAULT_ENCUARENTENA,
+    poblacion: cfg.poblacion,
+    encuarentena: cfg.encuarentena,
     terminado: false,
     pausado: false,
     shouldStep: false,
-    tiempoenfermedad: DEFAULT_TIEMPO_ENFERMEDAD,
-    modozombie: DEFAULT_MODO_ZOMBIE,
-    mortalidad: DEFAULT_MORTALIDAD,
-    tasacontagio: 90,
-    velocidad: 1.5,
+    tiempoenfermedad: cfg.tiempoenfermedad,
+    modozombie: cfg.modozombie,
+    mortalidad: cfg.mortalidad,
+    tasacontagio: cfg.tasacontagio,
+    velocidad: cfg.velocidad,
     r0: "0.00",
     picoEnfermos: 0,
     picoEnfermosPct: 0,
@@ -46,6 +84,20 @@ document.addEventListener("alpine:init", () => {
   });
 
   simulationStore = Alpine.store(STORE_NAME);
+
+  // Guardar config automáticamente al cambiar parámetros
+  Alpine.effect(() => {
+    const _ = [
+      simulationStore.poblacion,
+      simulationStore.encuarentena,
+      simulationStore.tiempoenfermedad,
+      simulationStore.modozombie,
+      simulationStore.mortalidad,
+      simulationStore.tasacontagio,
+      simulationStore.velocidad,
+    ];
+    saveConfig();
+  });
 });
 
 function setup() {
@@ -74,6 +126,14 @@ function draw() {
     } else if (simulationStore.shouldStep) {
       simulateFrame();
       simulationStore.shouldStep = false;
+    } else if (simulationStore.terminado) {
+      // Movimiento lento post-simulación: actualizar posiciones con velocidad reducida
+      const velOriginal = simulationStore.velocidad;
+      simulationStore.velocidad = velOriginal * 0.15;
+      for (let persona of simulationStore.personas) {
+        persona.update();
+      }
+      simulationStore.velocidad = velOriginal;
     } else {
       for (let persona of simulationStore.personas) {
         persona.dibuja();
@@ -170,6 +230,7 @@ function calcularR0() {
 
 function reiniciarSimulacion() {
   if (!simulationStore) return;
+  saveConfig();
   resetStoreState();
   crearPersonas();
   resetChart();
@@ -432,3 +493,4 @@ function clearBarreras() {
 
 window.clearBarreras = clearBarreras;
 window.reiniciarSimulacion = reiniciarSimulacion;
+window.saveConfig = saveConfig;
