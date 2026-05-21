@@ -12,11 +12,35 @@ const COLOR_ESTADO = Object.freeze({
   [ESTADOS.MUERTO]:     { hex: "#64748b", rgb: [100, 116, 139] },
 });
 
+const RADIO_PERSONA = 4;
+const VELOCIDAD_INICIAL_MAX = 4;
+const EPSILON_DISTANCIA = 0.001;
+const EPSILON_CROSS = 0.0001;
+const SEPARACION_BARRERA = 0.5;
+const VELOCIDAD_RECUPERADO = 0.5;
+
+const AURA_ENFERMO_OPACIDAD = 30;
+const AURA_ENFERMO_AMPLITUD = 3;
+const AURA_ENFERMO_BASE = 5;
+const AURA_ENFERMO_FRECUENCIA = 0.1;
+
+const AURA_ZOMBI_OPACIDAD = 45;
+const AURA_ZOMBI_AMPLITUD = 2;
+const AURA_ZOMBI_BASE = 4;
+const AURA_ZOMBI_FRECUENCIA = 0.15;
+
+const ANILLO_OPACIDAD = 180;
+const ANILLO_RADIO_EXTRA = 4;
+const ANILLO_PESO = 1.5;
+
+const CONTORNO_OPACIDAD = 120;
+const CONTORNO_PESO = 1;
+
 class Persona {
   constructor(x, y) {
     this.pos = createVector(x, y);
-    this.vel = createVector(random(-4, 4), random(-4, 4));
-    this.radio = 4;
+    this.vel = createVector(random(-VELOCIDAD_INICIAL_MAX, VELOCIDAD_INICIAL_MAX), random(-VELOCIDAD_INICIAL_MAX, VELOCIDAD_INICIAL_MAX));
+    this.radio = RADIO_PERSONA;
     this.estado = ESTADOS.SANO;
     this.tiempoEnfermo = 0;
     this.movible = true;
@@ -34,10 +58,11 @@ class Persona {
       if (!simulationStore.modozombie) {
         this.vel.mult(0);
       }
+      return;
     }
 
     if (nuevoEstado === ESTADOS.RECUPERADO) {
-      this.vel.mult(0.5);
+      this.vel.mult(VELOCIDAD_RECUPERADO);
     }
   }
 
@@ -52,20 +77,20 @@ class Persona {
 
   _dibujarAura(rgb) {
     if (this.estado === ESTADOS.ENFERMO) {
-      push();
-      noStroke();
-      const pulso = sin(frameCount * 0.1) * 3 + 5;
-      fill(rgb[0], rgb[1], rgb[2], 30);
-      ellipse(this.pos.x, this.pos.y, (this.radio + pulso) * 2, (this.radio + pulso) * 2);
-      pop();
+      this._dibujarAuraPulso(rgb, AURA_ENFERMO_FRECUENCIA, AURA_ENFERMO_AMPLITUD, AURA_ENFERMO_BASE, AURA_ENFERMO_OPACIDAD);
     } else if (this.estado === ESTADOS.MUERTO && this.movible) {
-      push();
-      noStroke();
-      const pulsoZombi = sin(frameCount * 0.15) * 2 + 4;
-      fill(16, 185, 129, 45);
-      ellipse(this.pos.x, this.pos.y, (this.radio + pulsoZombi) * 2, (this.radio + pulsoZombi) * 2);
-      pop();
+      const zombiRgb = COLOR_ESTADO[ESTADOS.RECUPERADO].rgb;
+      this._dibujarAuraPulso(zombiRgb, AURA_ZOMBI_FRECUENCIA, AURA_ZOMBI_AMPLITUD, AURA_ZOMBI_BASE, AURA_ZOMBI_OPACIDAD);
     }
+  }
+
+  _dibujarAuraPulso(rgb, frecuencia, amplitud, base, opacidad) {
+    push();
+    noStroke();
+    const pulso = sin(frameCount * frecuencia) * amplitud + base;
+    fill(rgb[0], rgb[1], rgb[2], opacidad);
+    ellipse(this.pos.x, this.pos.y, (this.radio + pulso) * 2, (this.radio + pulso) * 2);
+    pop();
   }
 
   _dibujarAnilloCuarentena(rgb) {
@@ -73,20 +98,19 @@ class Persona {
 
     push();
     noFill();
-    stroke(rgb[0], rgb[1], rgb[2], 180);
-    strokeWeight(1.5);
+    stroke(rgb[0], rgb[1], rgb[2], ANILLO_OPACIDAD);
+    strokeWeight(ANILLO_PESO);
     this._aplicarLineaDiscontinua([4, 3]);
-    ellipse(this.pos.x, this.pos.y, (this.radio + 4) * 2, (this.radio + 4) * 2);
+    ellipse(this.pos.x, this.pos.y, (this.radio + ANILLO_RADIO_EXTRA) * 2, (this.radio + ANILLO_RADIO_EXTRA) * 2);
     this._aplicarLineaDiscontinua([]);
     pop();
   }
 
   _dibujarCuerpo(rgb) {
     push();
-    noStroke();
     fill(rgb[0], rgb[1], rgb[2]);
-    stroke(255, 120);
-    strokeWeight(1);
+    stroke(255, CONTORNO_OPACIDAD);
+    strokeWeight(CONTORNO_PESO);
     ellipse(this.pos.x, this.pos.y, this.radio * 2, this.radio * 2);
     pop();
   }
@@ -161,8 +185,7 @@ class Persona {
     const movY = this.pos.y - oldY;
     const movLen = Math.sqrt(movX * movX + movY * movY);
 
-    if (movLen < 0.001) {
-      // Sin movimiento: resolver superposiciones existentes
+    if (movLen < EPSILON_DISTANCIA) {
       for (const barrera of simulationStore.barreras) {
         this._resolverSuperposicionEstatica(barrera);
       }
@@ -181,57 +204,41 @@ class Persona {
     const barX = barrera.x2 - barrera.x1;
     const barY = barrera.y2 - barrera.y1;
     const barLenSq = barX * barX + barY * barY;
-    if (barLenSq < 0.001) return;
+    if (barLenSq < EPSILON_DISTANCIA) return;
 
     // Componente del movimiento perpendicular a la barrera
     const crossMov = movDirX * barY - movDirY * barX;
-    if (Math.abs(crossMov) < 0.0001) return; // Movimiento paralelo
+    if (Math.abs(crossMov) < EPSILON_CROSS) return;
 
     const startX = oldX - barrera.x1;
     const startY = oldY - barrera.y1;
     const crossStart = startX * barY - startY * barX;
     const tHit = -crossStart / crossMov;
 
-    // Verificar si la colisión ocurre dentro del frame
     if (tHit < -this.radio || tHit > movLen + this.radio) return;
 
-    // Punto de colisión (clamped al trayecto)
     const tClamped = constrain(tHit, 0, movLen);
     const hitX = oldX + movDirX * tClamped;
     const hitY = oldY + movDirY * tClamped;
 
-    // Punto más cercano en la barrera al punto de colisión
-    const apX = hitX - barrera.x1;
-    const apY = hitY - barrera.y1;
-    let proj = (apX * barX + apY * barY) / barLenSq;
-    proj = constrain(proj, 0, 1);
+    const { closestX, closestY, dx, dy, distSq } = this._puntoMasCercanoEnBarrera(barrera, barX, barY, barLenSq, hitX, hitY);
 
-    const closestX = barrera.x1 + proj * barX;
-    const closestY = barrera.y1 + proj * barY;
-    const dx = hitX - closestX;
-    const dy = hitY - closestY;
-    const distSq = dx * dx + dy * dy;
-
-    // Solo colisionar si la partícula realmente toca la barrera
     if (distSq >= this.radio * this.radio) return;
 
     const dist = Math.sqrt(distSq);
 
-    if (dist > 0.001) {
-      // Posicionar partícula en el punto de colisión + separación
+    if (dist > EPSILON_DISTANCIA) {
       const nx = dx / dist;
       const ny = dy / dist;
-      this.pos.x = closestX + nx * (this.radio + 0.5);
-      this.pos.y = closestY + ny * (this.radio + 0.5);
+      this.pos.x = closestX + nx * (this.radio + SEPARACION_BARRERA);
+      this.pos.y = closestY + ny * (this.radio + SEPARACION_BARRERA);
 
-      // Reflejar velocidad
       const dot = this.vel.x * nx + this.vel.y * ny;
       if (dot < 0) {
         this.vel.x -= 2 * dot * nx;
         this.vel.y -= 2 * dot * ny;
       }
     } else {
-      // Caso degenerado: empujar en dirección del movimiento
       this.pos.x = hitX - movDirX * this.radio;
       this.pos.y = hitY - movDirY * this.radio;
       this.vel.x *= -1;
@@ -243,20 +250,11 @@ class Persona {
     const barX = barrera.x2 - barrera.x1;
     const barY = barrera.y2 - barrera.y1;
     const barLenSq = barX * barX + barY * barY;
-    if (barLenSq < 0.001) return;
+    if (barLenSq < EPSILON_DISTANCIA) return;
 
-    const apX = this.pos.x - barrera.x1;
-    const apY = this.pos.y - barrera.y1;
-    let proj = (apX * barX + apY * barY) / barLenSq;
-    proj = constrain(proj, 0, 1);
+    const { closestX, closestY, dx, dy, distSq } = this._puntoMasCercanoEnBarrera(barrera, barX, barY, barLenSq, this.pos.x, this.pos.y);
 
-    const closestX = barrera.x1 + proj * barX;
-    const closestY = barrera.y1 + proj * barY;
-    const dx = this.pos.x - closestX;
-    const dy = this.pos.y - closestY;
-    const distSq = dx * dx + dy * dy;
-
-    if (distSq >= this.radio * this.radio || distSq < 0.001) return;
+    if (distSq >= this.radio * this.radio || distSq < EPSILON_DISTANCIA) return;
 
     const dist = Math.sqrt(distSq);
     const overlap = this.radio - dist;
@@ -270,6 +268,21 @@ class Persona {
       this.vel.x -= 2 * dot * nx;
       this.vel.y -= 2 * dot * ny;
     }
+  }
+
+  _puntoMasCercanoEnBarrera(barrera, barX, barY, barLenSq, puntoX, puntoY) {
+    const desdeInicioX = puntoX - barrera.x1;
+    const desdeInicioY = puntoY - barrera.y1;
+    let proj = (desdeInicioX * barX + desdeInicioY * barY) / barLenSq;
+    proj = constrain(proj, 0, 1);
+
+    const closestX = barrera.x1 + proj * barX;
+    const closestY = barrera.y1 + proj * barY;
+    const dx = puntoX - closestX;
+    const dy = puntoY - closestY;
+    const distSq = dx * dx + dy * dy;
+
+    return { closestX, closestY, dx, dy, distSq };
   }
 
   // --- Colisión con otra persona ---
@@ -287,7 +300,6 @@ class Persona {
     this._resolverSuperposicionMutua(otraPersona, dx, dy, distancia, distanciaMinima);
     this._intentarContagioMutuo(otraPersona);
 
-    // Colisión elástica con rotación aleatoria para variedad
     this.vel.rotate(random(-PI / 8, PI / 8));
     otraPersona.vel.rotate(random(-PI / 8, PI / 8));
   }
